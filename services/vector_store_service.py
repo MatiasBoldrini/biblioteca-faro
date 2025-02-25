@@ -124,6 +124,18 @@ class VectorStoreService:
         
         return results
 
+    def remove_document(self, filename):
+        """Remove document from vector store"""
+        try:
+            # Delete embeddings and metadata for the specified document
+            self.collection.delete(
+                where={"book": {"$eq": filename}}
+            )
+            print(f"Removed document {filename} from vector store")
+            return True
+        except Exception as e:
+            print(f"Error removing document from vector store: {e}")
+            return False
 
     def reindex_all_documents(self):
         """Rebuild the index from all documents in the books directory"""

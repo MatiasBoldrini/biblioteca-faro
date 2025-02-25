@@ -137,5 +137,49 @@ def reindex():
             'message': f'Error during reindexing: {str(e)}'
         }), 500
 
+@app.route('/documents', methods=['GET'])
+def list_documents():
+    try:
+        documents = []
+        for file_path in document_service.get_all_books():
+            file_stat = os.stat(file_path)
+            documents.append({
+                'filename': os.path.basename(file_path),
+                'size': file_stat.st_size,
+                'modified': file_stat.st_mtime
+            })
+        return jsonify({
+            'success': True,
+            'documents': documents
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Error listing documents: {str(e)}'
+        }), 500
+
+@app.route('/documents/<filename>', methods=['DELETE'])
+def delete_document(filename):
+    try:
+        file_path = os.path.join(document_service.books_dir, secure_filename(filename))
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            # Also remove from vector store
+            vector_store.remove_document(filename)
+            return jsonify({
+                'success': True,
+                'message': f'Document {filename} deleted successfully'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'Document not found'
+            }), 404
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Error deleting document: {str(e)}'
+        }), 500
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))

@@ -43,27 +43,39 @@ class GeminiService:
             Generated response with citations
         """
         try:
-            # Create a prompt with the context and query
+            # Reformatear el contexto para resaltar mejor las fuentes y páginas
+            formatted_sources = []
+            for i, source in enumerate(sources):
+                book_name = source["book"].split("_")[0]  # Quitar el UUID
+                page_num = source["page"]
+                text = source["text"]
+                # Aquí es donde explícitamente incluimos el número de página en el contexto
+                formatted_sources.append(f"[FUENTE {i+1}] {book_name}, página {page_num}\n{text}")
+            
+            formatted_context = "\n\n".join(formatted_sources)
+            
+            # Create a prompt with the context and query, including explicit instructions
             prompt = f"""
-            Tu tarea es responder a la pregunta del usuario basándote en la información proporcionada.
+            Tu tarea es responder a la pregunta del usuario basándote ÚNICAMENTE en la información proporcionada.
             Si la información para responder no está en el contexto, indica que no tienes suficiente información.
-            Usa solo la información proporcionada en el contexto.
             
             CONTEXTO:
-            {context}
+            {formatted_context}
             
             PREGUNTA:
             {query}
             
             INSTRUCCIONES IMPORTANTES:
-            - Responde en español.
-            - Proporciona una respuesta clara y concisa.
-            - Si mencionas información del contexto, incluye una referencia al origen usando [número].
-            - Al final de tu respuesta, enumera las fuentes utilizadas con el formato:
+            - Responde en español de manera clara y concisa.
+            - CADA VEZ que uses información del contexto, debes citar la fuente exacta usando el formato [FUENTE X] donde X es el número de la fuente.
+            - Asegúrate de mencionar el número de página exacto como aparece en el contexto (por ejemplo: "página 1-22", "página 4-32").
+            - Al final de tu respuesta, incluye una sección de "Fuentes:" con la lista completa de fuentes utilizadas:
+              
               Fuentes:
-              [1] Nombre del libro, página X
-              [2] Nombre del libro, página Y
-              etc.
+              [1] Nombre del libro, página X-X
+              [2] Nombre del libro, página X-X
+              
+            - NO INVENTES información ni números de página que no estén en el contexto.
             """
             
             # Generate response

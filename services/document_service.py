@@ -125,24 +125,41 @@ class DocumentService:
         """Split text into chunks with overlapping and track page numbers"""
         chunks = []
         
-        # Find page markers
-        page_pattern = r"\[PAGE (\d+)\]"
-        current_page = "N/A"
+        # Patrón para detectar marcadores de página:
+        # - [PAGE número]
+        # - página número (aceptando acento)
+        # - un número en línea sola
+        # - dos números separados por guión en línea sola (se toma el primero)
+        page_pattern = (
+            r"(?:\[PAGE (\d+)\])|"
+            r"(?:p[aá]gina\s+(\d+))|"
+            r"(?:\n\s*(\d+)\s*\n)|"
+            r"(?:\n\s*(\d+)-\d+\s*\n)"
+        )
         
-        # Remove the page markers and keep track of their positions
         page_positions = {}
-        for match in re.finditer(page_pattern, text):
-            page_num = match.group(1)
+        for match in re.finditer(page_pattern, text, flags=re.IGNORECASE):
+            page_num = None
+            if match.group(1):
+                page_num = match.group(1)
+            elif match.group(2):
+                page_num = match.group(2)
+            elif match.group(3):
+                page_num = match.group(3)
+            elif match.group(4):
+                page_num = match.group(4)
+            
+            # Guarda la posición del marcador para asignarlo luego al chunk
             position = match.start()
             page_positions[position] = page_num
         
-        # Remove the page markers from the text
-        clean_text = re.sub(page_pattern, "", text)
+        # Elimina los marcadores de página del texto
+        clean_text = re.sub(page_pattern, "", text, flags=re.IGNORECASE)
         
-        # Create chunks
+        # Creación de chunks
         start = 0
         while start < len(clean_text):
-            # Determine current page for this position
+            # Determina la página actual para esta posición
             current_page = "N/A"
             for pos, page in sorted(page_positions.items()):
                 if pos <= start:
@@ -150,11 +167,9 @@ class DocumentService:
                 else:
                     break
             
-            # Get chunk
             end = start + self.chunk_size
             chunk_text = clean_text[start:end]
             
-            # Only add non-empty chunks
             if chunk_text.strip():
                 chunks.append({
                     "text": chunk_text.strip(),
@@ -162,7 +177,6 @@ class DocumentService:
                     "book": book_name
                 })
             
-            # Move start position for next chunk (with overlap)
             start = end - self.chunk_overlap
         
         return chunks

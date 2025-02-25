@@ -6,361 +6,82 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Biblioteca Faro</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body {
-            background-color: #f8f9fa;
-        }
-
-        .header {
-            background-color: #0d6efd;
-            color: white;
-            padding: 20px 0;
-            text-align: center;
-            margin-bottom: 30px;
-        }
-
-        .chat-container {
-            height: 500px;
-            overflow-y: auto;
-            border: 1px solid #dee2e6;
-            border-radius: 5px;
-            background-color: white;
-            padding: 15px;
-            margin-bottom: 15px;
-        }
-
-        .user-message {
-            background-color: #0d6efd;
-            color: white;
-            padding: 10px 15px;
-            border-radius: 15px;
-            margin-bottom: 10px;
-            max-width: 80%;
-            margin-left: auto;
-        }
-
-        .assistant-message {
-            background-color: #f1f1f1;
-            padding: 10px 15px;
-            border-radius: 15px;
-            margin-bottom: 10px;
-            max-width: 80%;
-        }
-
-        .sources {
-            font-size: 0.8em;
-            color: #6c757d;
-            margin-top: 5px;
-        }
-
-        .spinner-border {
-            width: 1.5rem;
-            height: 1.5rem;
-        }
-
-        .upload-area {
-            border: 2px dashed #0d6efd;
-            border-radius: 5px;
-            padding: 20px;
-            text-align: center;
-            cursor: pointer;
-            background-color: #f8f9fa;
-            transition: background-color 0.3s;
-        }
-
-        .upload-area:hover {
-            background-color: #e9ecef;
-        }
-
-        .citation {
-            color: #0d6efd;
-            cursor: pointer;
-        }
-    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
 
 <body>
-    <div class="header">
+    <header class="header">
         <div class="container">
-            <h1>Biblioteca Faro</h1>
-            <p>Tu asistente de biblioteca inteligente</p>
+            <h1><i class="fas fa-book-reader me-2"></i>Biblioteca Faro</h1>
         </div>
-    </div>
+    </header>
 
-    <div class="container">
-        <div class="row">
-            <div class="col-md-8">
-                <div id="chatContainer" class="chat-container">
+    <main class="container">
+        <div class="col-lg-4 order-1 order-lg-2">
+            <div class="sidebar-container">
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <i class="fas fa-cloud-upload-alt me-2"></i>Carga de Documentos
+                    </div>
+                    <div class="card-body">
+                        <div id="uploadArea" class="upload-area mb-3">
+                            <i class="fas fa-file-upload fs-3 mb-2 text-primary"></i>
+                            <p>Arrastra y suelta tus documentos aquí o haz clic para seleccionarlos</p>
+                            <p class="text-muted small">Formatos aceptados: PDF, TXT, DOC, DOCX</p>
+                        </div>
+                        <input type="file" id="fileInput" class="d-none">
+                        <div id="uploadProgress" class="progress mb-3 d-none">
+                            <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+                        </div>
+                        <div id="uploadStatus" class="small text-muted mb-3"></div>
+                        <button id="reindexButton" class="btn btn-outline-secondary w-100">
+                            <i class="fas fa-sync-alt me-2"></i>Reindexar documentos
+                        </button>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-folder-open me-2"></i>Documentos Cargados
+                    </div>
+                    <div class="card-body">
+                        <div id="documentList">
+                            <p class="text-muted text-center">
+                                <i class="fas fa-inbox fs-4 d-block mb-2"></i>
+                                No hay documentos cargados
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel principal de chat -->
+        <div class="col-lg-8 order-2 order-lg-1">
+            <div class="chat-container">
+                <div class="chat-messages" id="chatContainer">
                     <div class="assistant-message">
-                        ¡Bienvenido a Biblioteca Faro! Carga tus documentos y pregúntame sobre su contenido.
+                        <p>👋 ¡Bienvenido a Biblioteca Faro!</p>
+                        <p>Carga tus documentos y pregúntame sobre su contenido. Estoy aquí para ayudarte a
+                            encontrar la
+                            información que necesitas.</p>
                     </div>
                 </div>
                 <div class="input-group mb-3">
-                    <input type="text" id="queryInput" class="form-control" placeholder="Escribe tu pregunta aquí...">
-                    <button id="sendButton" class="btn btn-primary"></button>
-                    <span id="querySpinner" class="spinner-border spinner-border-sm d-none" role="status"
-                        aria-hidden="true"></span>
-                    <span id="sendText">Enviar</span>
+                    <input type="text" id="queryInput" class="form-control"
+                        placeholder="Escribe tu pregunta aquí...">
+                    <button id="sendButton" class="btn btn-primary">
+                        <span id="querySpinner" class="spinner-border spinner-border-sm d-none" role="status"
+                            aria-hidden="true"></span>
+                        <i class="fas fa-paper-plane" ></i>
                     </button>
                 </div>
             </div>
-
-            <div class="col-md-4">
-                <div class="card mb-3">
-                    <div class="card-header">Carga de Documentos</div>
-                    <div class="card-body">
-                        <div id="uploadArea" class="upload-area mb-3"></div>
-                        <p>Arrastra y suelta tus documentos aquí o haz clic para seleccionarlos</p>
-                        <p class="text-muted small">Formatos aceptados: PDF, TXT, DOC, DOCX</p>
-                    </div>
-                    <input type="file" id="fileInput" class="d-none">
-                    <div id="uploadProgress" class="progress mb-3 d-none">
-                        <div class="progress-bar" role="progressbar" style="width: 0%"></div>
-                    </div>
-                    <div id="uploadStatus" class="small text-muted mb-3"></div>
-                    <button id="reindexButton" class="btn btn-outline-secondary w-100">Reindexar documentos</button>
-                </div>
-            </div>
-            <div class="card">
-                <div class="card-header">Documentos Cargados</div>
-                <div class="card-body">
-                    <div id="documentList">
-                        <p class="text-muted text-center">No hay documentos cargados</p>
-                    </div>
-                </div>
-            </div>
         </div>
-    </div>
-    </div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            const chatContainer = document.getElementById('chatContainer');
-            const queryInput = document.getElementById('queryInput');
-            const sendButton = document.getElementById('sendButton');
-            const uploadArea = document.getElementById('uploadArea');
-            const fileInput = document.getElementById('fileInput');
-            const uploadProgress = document.getElementById('uploadProgress');
-            const progressBar = uploadProgress.querySelector('.progress-bar');
-            const uploadStatus = document.getElementById('uploadStatus');
-            const reindexButton = document.getElementById('reindexButton');
-            const querySpinner = document.getElementById('querySpinner');
-            const sendText = document.getElementById('sendText');
+    </main>
 
-            // Handle file upload by clicking
-            uploadArea.addEventListener('click', function () {
-                fileInput.click();
-            });
-
-            // Handle file upload by drag and drop
-            uploadArea.addEventListener('dragover', function (e) {
-                e.preventDefault();
-                uploadArea.style.backgroundColor = '#e9ecef';
-            });
-
-            uploadArea.addEventListener('dragleave', function () {
-                uploadArea.style.backgroundColor = '#f8f9fa';
-            });
-
-            uploadArea.addEventListener('drop', function (e) {
-                e.preventDefault();
-                uploadArea.style.backgroundColor = '#f8f9fa';
-
-                if (e.dataTransfer.files.length) {
-                    handleFileUpload(e.dataTransfer.files[0]);
-                }
-            });
-
-            // Handle file input change
-            fileInput.addEventListener('change', function () {
-                if (fileInput.files.length) {
-                    handleFileUpload(fileInput.files[0]);
-                }
-            });
-
-            // Handle file upload
-            function handleFileUpload(file) {
-                const allowedTypes = [
-                    'application/pdf',
-                    'text/plain',
-                    'application/msword',
-                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-                ];
-
-                if (!allowedTypes.includes(file.type)) {
-                    uploadStatus.innerText = 'Formato no soportado. Solo se permiten PDF, TXT, DOC y DOCX.';
-                    return;
-                }
-
-                // Show progress
-                uploadProgress.classList.remove('d-none');
-                uploadStatus.innerText = 'Subiendo archivo...';
-                progressBar.style.width = '0%';
-
-                const formData = new FormData();
-                formData.append('file', file);
-
-                const xhr = new XMLHttpRequest();
-
-                // Track upload progress
-                xhr.upload.addEventListener('progress', function (e) {
-                    if (e.lengthComputable) {
-                        const percentComplete = (e.loaded / e.total) * 100;
-                        progressBar.style.width = percentComplete + '%';
-                    }
-                });
-
-                // Handle response
-                xhr.onload = function () {
-                    if (xhr.status === 200) {
-                        const response = JSON.parse(xhr.responseText);
-                        uploadStatus.innerText = response.message;
-
-                        // Add assistant message about successful upload
-                        const messageDiv = document.createElement('div');
-                        messageDiv.className = 'assistant-message';
-                        messageDiv.innerText = `He procesado el documento "${response.filename}". ¡Pregúntame sobre su contenido!`;
-                        chatContainer.appendChild(messageDiv);
-                        chatContainer.scrollTop = chatContainer.scrollHeight;
-
-                        // Update document list (would require an additional endpoint)
-                        updateDocumentList();
-                    } else {
-                        try {
-                            const response = JSON.parse(xhr.responseText);
-                            uploadStatus.innerText = 'Error: ' + response.message;
-                        } catch (e) {
-                            uploadStatus.innerText = 'Error al procesar el archivo.';
-                        }
-                    }
-                };
-
-                xhr.onerror = function () {
-                    uploadStatus.innerText = 'Error en la conexión.';
-                };
-
-                // Send request
-                xhr.open('POST', '/upload', true);
-                xhr.send(formData);
-            }
-
-            // Handle query submission
-            sendButton.addEventListener('click', function () {
-                sendQuery();
-            });
-
-            queryInput.addEventListener('keydown', function (e) {
-                if (e.key === 'Enter') {
-                    sendQuery();
-                }
-            });
-
-            function sendQuery() {
-                const query = queryInput.value.trim();
-                if (!query) return;
-
-                // Show user message
-                const userMessageDiv = document.createElement('div');
-                userMessageDiv.className = 'user-message';
-                userMessageDiv.innerText = query;
-                chatContainer.appendChild(userMessageDiv);
-
-                // Clear input
-                queryInput.value = '';
-
-                // Show loading indicator
-                querySpinner.classList.remove('d-none');
-                sendText.innerText = 'Enviando...';
-                sendButton.disabled = true;
-
-                // Scroll to bottom
-                chatContainer.scrollTop = chatContainer.scrollHeight;
-
-                // Send query to server
-                fetch('/query', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ query: query }),
-                })
-                    .then(response => response.json())
-                    .then(data => {
-                        // Create assistant message
-                        const assistantMessageDiv = document.createElement('div');
-                        assistantMessageDiv.className = 'assistant-message';
-                        assistantMessageDiv.innerHTML = data.answer;
-
-                        // Add citation click handlers after the message is added to DOM
-                        chatContainer.appendChild(assistantMessageDiv);
-
-                        // Add click handlers for citations
-                        const citations = assistantMessageDiv.querySelectorAll('.citation');
-                        citations.forEach(citation => {
-                            citation.addEventListener('click', function () {
-                                const sourceIdx = this.getAttribute('data-source-idx');
-                                if (sourceIdx !== null && data.chunks && data.chunks[sourceIdx]) {
-                                    const source = data.chunks[sourceIdx];
-                                    alert(`Fuente: ${source.book}${source.page !== 'N/A' ? ', página ' + source.page : ''}`);
-                                }
-                            });
-                        });
-
-                        // Scroll to bottom
-                        chatContainer.scrollTop = chatContainer.scrollHeight;
-                    })
-                    .catch(error => {
-                        console.error('Error:', error);
-                        const errorDiv = document.createElement('div');
-                        errorDiv.className = 'assistant-message';
-                        errorDiv.innerText = 'Lo siento, ha ocurrido un error al procesar tu consulta.';
-                        chatContainer.appendChild(errorDiv);
-                        chatContainer.scrollTop = chatContainer.scrollHeight;
-                    })
-                    .finally(() => {
-                        // Hide loading indicator
-                        querySpinner.classList.add('d-none');
-                        sendText.innerText = 'Enviar';
-                        sendButton.disabled = false;
-                    });
-            }
-
-            // Handle reindex button
-            reindexButton.addEventListener('click', function () {
-                if (confirm('¿Estás seguro de que deseas reindexar todos los documentos? Esta operación puede tomar tiempo.')) {
-                    reindexButton.disabled = true;
-                    reindexButton.innerText = 'Reindexando...';
-
-                    fetch('/reindex', {
-                        method: 'POST'
-                    })
-                        .then(response => response.json())
-                        .then(data => {
-                            alert(data.message);
-                        })
-                        .catch(error => {
-                            console.error('Error:', error);
-                            alert('Error al reindexar los documentos.');
-                        })
-                        .finally(() => {
-                            reindexButton.disabled = false;
-                            reindexButton.innerText = 'Reindexar documentos';
-                        });
-                }
-            });
-
-            // Function to update document list
-            function updateDocumentList() {
-                // This would require an additional endpoint to list documents
-                // For now, just clearing the "no documents" message
-                const documentList = document.getElementById('documentList');
-                if (documentList.querySelector('.text-muted')) {
-                    documentList.innerHTML = '<p>Documentos cargados recientemente</p>';
-                }
-            }
-        });
-    </script>
-
+    <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 
