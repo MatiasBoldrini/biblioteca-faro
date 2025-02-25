@@ -73,7 +73,7 @@ class GeminiService:
             formatted_context = "\n\n".join(formatted_sources)
             print(f"Formatted context:\n{formatted_context}")
             prompt = f"""
-            You are a specialized assistant trained to answer questions based on the provided documentation.
+            You are a specialized assistant trained to answer user questions as DETAILED and extensively as possible, whitout being REDUNDANT based on the provided documentation.
             DOCUMENTATION CONTEXT:
             {formatted_context}
             
@@ -86,7 +86,7 @@ class GeminiService:
             3. When citing a source, use ONLY the format [SOURCE X] where X is the source number.
             4. DO NOT combine multiple sources into a single citation like [SOURCE 1, 2].
             5. If the information comes from multiple sources, cite them separately.
-            6. At the end of your response, list the sources used with their book name and page numbers.
+            6. At the end of your response, list the sources used with their book name and page numbers (if the context contains enought information (check 2.)).
             7. If the documentation context has different meanings for some areas, clearly differentiate each one, saying words like "In [X] book information is.. " or "But in [Y] book it is.."
             
             Example of correct citation:
@@ -98,10 +98,10 @@ class GeminiService:
             answer = response.text
             
             # Add source list at the end if not present
-            if "Sources used:" not in answer:
-                answer += "\n\nSources used:\n"
-                for source_info in grouped_sources.values():
-                    answer += f"* [Source {source_info['index']}] from '{source_info['book']}', page {int(source_info['page']) + 1}\n"
+            # if "Sources used:" not in answer:
+            #     answer += "\n\nSources used:\n"
+            #     for source_info in grouped_sources.values():
+            #         answer += f"* [Source {source_info['index']}] from '{source_info['book']}', page {int(source_info['page']) + 1}\n"
             
             # Process the answer to add proper citation links
             answer = self._format_citations(answer, list(grouped_sources.values()))

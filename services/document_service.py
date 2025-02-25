@@ -16,9 +16,9 @@ class DocumentService:
     def __init__(self):
         self.base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         self.books_dir = os.path.join(self.base_dir, 'books')
-        self.chunk_size = 1000  # characters per chunk
-        self.chunk_overlap = 200  # overlap between chunks
-        self.max_chunk_size = 1500  # absolute maximum size for any chunk
+        self.chunk_size = 500  # characters per chunk
+        self.chunk_overlap = 150  # overlap between chunks
+        self.max_chunk_size = 900  # absolute maximum size for any chunk
         
         # Create books directory if it doesn't exist
         os.makedirs(self.books_dir, exist_ok=True)
@@ -128,12 +128,14 @@ class DocumentService:
         
         # Patrón para detectar marcadores de página
         page_pattern = (
-            r"(?:\[PAGE (\d+)\])|"            # [PAGE número]
-            r"(?:p[aá]gina\s+(\d+))|"         # página número
+            # r"(?:\[PAGE (\d+)\])|"            # [PAGE número]
+            # r"(?:p[aá]gina\s+(\d+))|"         # página número
             r"(?:\n\s*(\d+)\s*\n)|"           # \n número \n
-            r"(?:\n\s*(\d+)-\d+\s*\n)|"       # \n número-numero \n
+            r"(?:\s*(\d+)\s*\n)|"           #  número \n
+
+            # r"(?:\n\s*(\d+)-\d+\s*\n)|"       # \n número-numero \n
             r"(?:^(\d+)-\d+\n)|"              # número-numero\n (sin espacio a la izquierda)
-            r"(?:^(\d+)-\d+\s*\n)"            # número-numero\n (con o sin espacio a la izquierda)
+            # r"(?:^(\d+)-\d+\s*\n)"            # número-numero\n (con o sin espacio a la izquierda)
         )
         
         # Potenciales marcadores de sección (encabezados)
