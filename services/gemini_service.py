@@ -21,7 +21,7 @@ class GeminiService:
         try:
             self.model = genai.GenerativeModel(
                 'models/gemini-2.0-flash-lite',
-                generation_config={'temperature': 0.2, 'top_p': 0.9 }
+                generation_config={'temperature': 0.5, 'top_p': 0.9 }
             )
             print("Successfully connected to Gemini API")
         except Exception as e:
@@ -73,24 +73,26 @@ class GeminiService:
             formatted_context = "\n\n".join(formatted_sources)
             print(f"Formatted context:\n{formatted_context}")
             prompt = f"""
-            You are a specialized assistant trained to answer user questions as DETAILED and extensively as possible, whitout being REDUNDANT based on the provided documentation.
+            You are a specialized assistant trained to provide DETAILED and PRECISE answers based solely on the provided documentation.
+            
             DOCUMENTATION CONTEXT:
             {formatted_context}
             
             USER QUESTION:
             {query}
             
-            IMPORTANT INSTRUCTIONS:
-            1. ONLY use the information provided in the DOCUMENTATION CONTEXT.
-            2. If the context does not contain enough information to answer the specific question, clearly indicate which part of the question you cannot answer.
-            3. When citing a source, use ONLY the format [SOURCE X] where X is the source number.
-            4. DO NOT combine multiple sources into a single citation like [SOURCE 1, 2].
-            5. If the information comes from multiple sources, cite them separately.
-            6. At the end of your response, list the sources used with their book name and page numbers (if the context contains enought information (check 2.)).
-            7. If the documentation context has different meanings for some areas, clearly differentiate each one, saying words like "In [X] book information is.. " or "But in [Y] book it is.."
+            INSTRUCTIONS:
+            1. Use ONLY the information available in the DOCUMENTATION CONTEXT.
+            2. If the context lacks enough information to fully answer the question, explicitly state what is missing.
+            3. Cite sources using the format [SOURCE X], where X is the source number.
+            4. Do NOT combine multiple sources into a single citation (e.g., [SOURCE 1, 2] is NOT allowed).
+            5. If information comes from multiple sources, cite each separately and clarify any differences.
+            6. At the end of the response, list the sources used along with their book name and page numbers, ONLY if the context provides enough information.
+            7. If different sources provide different perspectives, explicitly state this using phrases like:
+               - "In [SOURCE X], it is stated that... However, in [SOURCE Y], it is mentioned that..."
             
             Example of correct citation:
-            "According to [SOURCE 1] the process begins like this... but according to [SOURCE 2] indicates that it continues..."
+            "According to [SOURCE 1], the process begins like this... However, [SOURCE 2] states that it continues differently..."
             """
             
             # Generate response
