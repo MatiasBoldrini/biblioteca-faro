@@ -90,54 +90,47 @@
     <div class="container">
         <div class="row">
             <div class="col-md-8">
-                <!-- Chat interface -->
-                <div class="chat-container" id="chatContainer">
+                <div id="chatContainer" class="chat-container">
                     <div class="assistant-message">
-                        Hola, soy Faro, tu asistente de biblioteca. Puedo responder preguntas basadas en los documentos
-                        que hayas subido. ¿En qué puedo ayudarte hoy?
+                        ¡Bienvenido a Biblioteca Faro! Carga tus documentos y pregúntame sobre su contenido.
                     </div>
                 </div>
-
-                <!-- Input form -->
                 <div class="input-group mb-3">
-                    <input type="text" class="form-control" id="queryInput" placeholder="Escribe tu pregunta...">
-                    <button class="btn btn-primary" type="button" id="sendButton">
-                        <span class="spinner-border spinner-border-sm d-none" id="querySpinner" role="status"
-                            aria-hidden="true"></span>
-                        Enviar
+                    <input type="text" id="queryInput" class="form-control" placeholder="Escribe tu pregunta aquí...">
+                    <button id="sendButton" class="btn btn-primary"></button>
+                    <span id="querySpinner" class="spinner-border spinner-border-sm d-none" role="status"
+                        aria-hidden="true"></span>
+                    <span id="sendText">Enviar</span>
                     </button>
                 </div>
             </div>
 
             <div class="col-md-4">
-                <!-- File upload -->
-                <div class="card mb-4">
-                    <div class="card-header">Subir Documentos</div>
+                <div class="card mb-3">
+                    <div class="card-header">Carga de Documentos</div>
                     <div class="card-body">
-                        <div class="upload-area" id="uploadArea">
-                            <div>Arrastra y suelta archivos aquí<br>o haz clic para seleccionar</div>
-                            <input type="file" id="fileInput" style="display:none;" accept=".pdf,.txt,.doc,.docx">
-                        </div>
-                        <div class="progress mt-3 d-none" id="uploadProgress">
-                            <div class="progress-bar" role="progressbar" style="width: 0%"></div>
-                        </div>
-                        <div id="uploadStatus" class="mt-2 text-center"></div>
+                        <div id="uploadArea" class="upload-area mb-3"></div>
+                        <p>Arrastra y suelta tus documentos aquí o haz clic para seleccionarlos</p>
+                        <p class="text-muted small">Formatos aceptados: PDF, TXT, DOC, DOCX</p>
                     </div>
+                    <input type="file" id="fileInput" class="d-none">
+                    <div id="uploadProgress" class="progress mb-3 d-none">
+                        <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+                    </div>
+                    <div id="uploadStatus" class="small text-muted mb-3"></div>
+                    <button id="reindexButton" class="btn btn-outline-secondary w-100">Reindexar documentos</button>
                 </div>
-
-                <!-- Management tools -->
-                <div class="card">
-                    <div class="card-header">Herramientas</div>
-                    <div class="card-body">
-                        <button class="btn btn-outline-secondary w-100 mb-2" id="reindexButton">
-                            <span class="spinner-border spinner-border-sm d-none" id="reindexSpinner" role="status"
-                                aria-hidden="true"></span>
-                            Reindexar Documentos
-                        </button>
+            </div>
+            <div class="card">
+                <div class="card-header">Documentos Cargados</div>
+                <div class="card-body">
+                    <div id="documentList">
+                        <p class="text-muted text-center">No hay documentos cargados</p>
                     </div>
                 </div>
             </div>
         </div>
+    </div>
     </div>
 
     <script>
@@ -152,28 +145,138 @@
             const uploadStatus = document.getElementById('uploadStatus');
             const reindexButton = document.getElementById('reindexButton');
             const querySpinner = document.getElementById('querySpinner');
-            const reindexSpinner = document.getElementById('reindexSpinner');
+            const sendText = document.getElementById('sendText');
 
-            // Query handling
-            sendButton.addEventListener('click', sendQuery);
-            queryInput.addEventListener('keypress', function (e) {
-                if (e.key === 'Enter') sendQuery();
+            // Handle file upload by clicking
+            uploadArea.addEventListener('click', function () {
+                fileInput.click();
+            });
+
+            // Handle file upload by drag and drop
+            uploadArea.addEventListener('dragover', function (e) {
+                e.preventDefault();
+                uploadArea.style.backgroundColor = '#e9ecef';
+            });
+
+            uploadArea.addEventListener('dragleave', function () {
+                uploadArea.style.backgroundColor = '#f8f9fa';
+            });
+
+            uploadArea.addEventListener('drop', function (e) {
+                e.preventDefault();
+                uploadArea.style.backgroundColor = '#f8f9fa';
+
+                if (e.dataTransfer.files.length) {
+                    handleFileUpload(e.dataTransfer.files[0]);
+                }
+            });
+
+            // Handle file input change
+            fileInput.addEventListener('change', function () {
+                if (fileInput.files.length) {
+                    handleFileUpload(fileInput.files[0]);
+                }
+            });
+
+            // Handle file upload
+            function handleFileUpload(file) {
+                const allowedTypes = [
+                    'application/pdf',
+                    'text/plain',
+                    'application/msword',
+                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                ];
+
+                if (!allowedTypes.includes(file.type)) {
+                    uploadStatus.innerText = 'Formato no soportado. Solo se permiten PDF, TXT, DOC y DOCX.';
+                    return;
+                }
+
+                // Show progress
+                uploadProgress.classList.remove('d-none');
+                uploadStatus.innerText = 'Subiendo archivo...';
+                progressBar.style.width = '0%';
+
+                const formData = new FormData();
+                formData.append('file', file);
+
+                const xhr = new XMLHttpRequest();
+
+                // Track upload progress
+                xhr.upload.addEventListener('progress', function (e) {
+                    if (e.lengthComputable) {
+                        const percentComplete = (e.loaded / e.total) * 100;
+                        progressBar.style.width = percentComplete + '%';
+                    }
+                });
+
+                // Handle response
+                xhr.onload = function () {
+                    if (xhr.status === 200) {
+                        const response = JSON.parse(xhr.responseText);
+                        uploadStatus.innerText = response.message;
+
+                        // Add assistant message about successful upload
+                        const messageDiv = document.createElement('div');
+                        messageDiv.className = 'assistant-message';
+                        messageDiv.innerText = `He procesado el documento "${response.filename}". ¡Pregúntame sobre su contenido!`;
+                        chatContainer.appendChild(messageDiv);
+                        chatContainer.scrollTop = chatContainer.scrollHeight;
+
+                        // Update document list (would require an additional endpoint)
+                        updateDocumentList();
+                    } else {
+                        try {
+                            const response = JSON.parse(xhr.responseText);
+                            uploadStatus.innerText = 'Error: ' + response.message;
+                        } catch (e) {
+                            uploadStatus.innerText = 'Error al procesar el archivo.';
+                        }
+                    }
+                };
+
+                xhr.onerror = function () {
+                    uploadStatus.innerText = 'Error en la conexión.';
+                };
+
+                // Send request
+                xhr.open('POST', '/upload', true);
+                xhr.send(formData);
+            }
+
+            // Handle query submission
+            sendButton.addEventListener('click', function () {
+                sendQuery();
+            });
+
+            queryInput.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter') {
+                    sendQuery();
+                }
             });
 
             function sendQuery() {
                 const query = queryInput.value.trim();
                 if (!query) return;
 
-                // Disable input during processing
-                queryInput.disabled = true;
-                sendButton.disabled = true;
-                querySpinner.classList.remove('d-none');
+                // Show user message
+                const userMessageDiv = document.createElement('div');
+                userMessageDiv.className = 'user-message';
+                userMessageDiv.innerText = query;
+                chatContainer.appendChild(userMessageDiv);
 
-                // Display user message
-                appendMessage(query, 'user');
+                // Clear input
                 queryInput.value = '';
 
-                // Send to backend
+                // Show loading indicator
+                querySpinner.classList.remove('d-none');
+                sendText.innerText = 'Enviando...';
+                sendButton.disabled = true;
+
+                // Scroll to bottom
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+
+                // Send query to server
                 fetch('/query', {
                     method: 'POST',
                     headers: {
@@ -183,168 +286,78 @@
                 })
                     .then(response => response.json())
                     .then(data => {
-                        if (data.success) {
-                            appendMessage(data.answer, 'assistant', data.chunks);
-                        } else {
-                            appendMessage('Error: ' + data.message, 'assistant');
-                        }
+                        // Create assistant message
+                        const assistantMessageDiv = document.createElement('div');
+                        assistantMessageDiv.className = 'assistant-message';
+                        assistantMessageDiv.innerHTML = data.answer;
+
+                        // Add citation click handlers after the message is added to DOM
+                        chatContainer.appendChild(assistantMessageDiv);
+
+                        // Add click handlers for citations
+                        const citations = assistantMessageDiv.querySelectorAll('.citation');
+                        citations.forEach(citation => {
+                            citation.addEventListener('click', function () {
+                                const sourceIdx = this.getAttribute('data-source-idx');
+                                if (sourceIdx !== null && data.chunks && data.chunks[sourceIdx]) {
+                                    const source = data.chunks[sourceIdx];
+                                    alert(`Fuente: ${source.book}${source.page !== 'N/A' ? ', página ' + source.page : ''}`);
+                                }
+                            });
+                        });
+
+                        // Scroll to bottom
+                        chatContainer.scrollTop = chatContainer.scrollHeight;
                     })
                     .catch(error => {
                         console.error('Error:', error);
-                        appendMessage('Lo siento, ocurrió un error al procesar tu pregunta.', 'assistant');
+                        const errorDiv = document.createElement('div');
+                        errorDiv.className = 'assistant-message';
+                        errorDiv.innerText = 'Lo siento, ha ocurrido un error al procesar tu consulta.';
+                        chatContainer.appendChild(errorDiv);
+                        chatContainer.scrollTop = chatContainer.scrollHeight;
                     })
                     .finally(() => {
-                        // Re-enable input
-                        queryInput.disabled = false;
-                        sendButton.disabled = false;
+                        // Hide loading indicator
                         querySpinner.classList.add('d-none');
-                        queryInput.focus();
+                        sendText.innerText = 'Enviar';
+                        sendButton.disabled = false;
                     });
             }
 
-            function appendMessage(text, sender, chunks = null) {
-                const messageDiv = document.createElement('div');
-                messageDiv.className = sender === 'user' ? 'user-message' : 'assistant-message';
-
-                // Format citations if present
-                if (sender === 'assistant') {
-                    // Replace [number] with clickable citations
-                    let formattedText = text.replace(/\[(\d+)\]/g, '<span class="citation" data-citation="$1">[$1]</span>');
-                    messageDiv.innerHTML = formattedText;
-                } else {
-                    messageDiv.textContent = text;
-                }
-
-                // Add source information for assistant messages
-                if (sender === 'assistant' && chunks && chunks.length > 0) {
-                    const sourcesDiv = document.createElement('div');
-                    sourcesDiv.className = 'sources';
-                    sourcesDiv.innerHTML = '<strong>Fuentes:</strong>';
-
-                    const sourcesList = document.createElement('ol');
-                    sourcesList.className = 'mb-0 ps-3 mt-1';
-
-                    chunks.forEach((chunk, index) => {
-                        const sourceItem = document.createElement('li');
-                        const bookName = chunk.clean_book_name || chunk.book;
-                        sourceItem.textContent = `${bookName}${chunk.page !== 'N/A' ? ', página ' + chunk.page : ''}`;
-                        sourcesList.appendChild(sourceItem);
-                    });
-
-                    sourcesDiv.appendChild(sourcesList);
-                    messageDiv.appendChild(sourcesDiv);
-                }
-
-                chatContainer.appendChild(messageDiv);
-                chatContainer.scrollTop = chatContainer.scrollHeight;
-            }
-
-            // File upload handling
-            uploadArea.addEventListener('click', () => {
-                fileInput.click();
-            });
-
-            uploadArea.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                uploadArea.style.backgroundColor = '#e9ecef';
-            });
-
-            uploadArea.addEventListener('dragleave', () => {
-                uploadArea.style.backgroundColor = '#f8f9fa';
-            });
-
-            uploadArea.addEventListener('drop', (e) => {
-                e.preventDefault();
-                uploadArea.style.backgroundColor = '#f8f9fa';
-
-                if (e.dataTransfer.files.length) {
-                    handleFileUpload(e.dataTransfer.files[0]);
-                }
-            });
-
-            fileInput.addEventListener('change', () => {
-                if (fileInput.files.length) {
-                    handleFileUpload(fileInput.files[0]);
-                }
-            });
-
-            function handleFileUpload(file) {
-                // Check file type
-                const fileExtension = file.name.split('.').pop().toLowerCase();
-                if (!['pdf', 'txt', 'doc', 'docx'].includes(fileExtension)) {
-                    uploadStatus.innerHTML = '<span class="text-danger">Tipo de archivo no soportado. Use PDF, TXT, DOC o DOCX.</span>';
-                    return;
-                }
-
-                // Prepare form data
-                const formData = new FormData();
-                formData.append('file', file);
-
-                // Show progress
-                uploadProgress.classList.remove('d-none');
-                uploadStatus.innerHTML = '<span class="text-primary">Subiendo archivo...</span>';
-                progressBar.style.width = '0%';
-                progressBar.textContent = '0%';
-
-                // Upload file
-                const xhr = new XMLHttpRequest();
-                xhr.open('POST', '/upload', true);
-
-                xhr.upload.onprogress = function (e) {
-                    if (e.lengthComputable) {
-                        const percentComplete = Math.round((e.loaded / e.total) * 100);
-                        progressBar.style.width = percentComplete + '%';
-                        progressBar.textContent = percentComplete + '%';
-                    }
-                };
-
-                xhr.onload = function () {
-                    if (xhr.status === 200) {
-                        const response = JSON.parse(xhr.responseText);
-                        if (response.success) {
-                            uploadStatus.innerHTML = '<span class="text-success">' + response.message + '</span>';
-                            appendMessage(`He procesado exitosamente el archivo "${response.filename}". Ahora puedes hacerme preguntas sobre su contenido.`, 'assistant');
-                        } else {
-                            uploadStatus.innerHTML = '<span class="text-danger">' + response.message + '</span>';
-                        }
-                    } else {
-                        uploadStatus.innerHTML = '<span class="text-danger">Error en la subida. Intente de nuevo.</span>';
-                    }
-
-                    // Reset file input
-                    fileInput.value = '';
-                };
-
-                xhr.send(formData);
-            }
-
-            // Reindex functionality
+            // Handle reindex button
             reindexButton.addEventListener('click', function () {
-                if (confirm('¿Estás seguro de que deseas reindexar todos los documentos? Este proceso puede tomar tiempo.')) {
+                if (confirm('¿Estás seguro de que deseas reindexar todos los documentos? Esta operación puede tomar tiempo.')) {
                     reindexButton.disabled = true;
-                    reindexSpinner.classList.remove('d-none');
+                    reindexButton.innerText = 'Reindexando...';
 
                     fetch('/reindex', {
-                        method: 'POST',
+                        method: 'POST'
                     })
                         .then(response => response.json())
                         .then(data => {
-                            if (data.success) {
-                                alert(data.message);
-                            } else {
-                                alert('Error: ' + data.message);
-                            }
+                            alert(data.message);
                         })
                         .catch(error => {
                             console.error('Error:', error);
-                            alert('Error al reindexar documentos.');
+                            alert('Error al reindexar los documentos.');
                         })
                         .finally(() => {
                             reindexButton.disabled = false;
-                            reindexSpinner.classList.add('d-none');
+                            reindexButton.innerText = 'Reindexar documentos';
                         });
                 }
             });
+
+            // Function to update document list
+            function updateDocumentList() {
+                // This would require an additional endpoint to list documents
+                // For now, just clearing the "no documents" message
+                const documentList = document.getElementById('documentList');
+                if (documentList.querySelector('.text-muted')) {
+                    documentList.innerHTML = '<p>Documentos cargados recientemente</p>';
+                }
+            }
         });
     </script>
 

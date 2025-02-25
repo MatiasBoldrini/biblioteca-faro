@@ -1,4 +1,6 @@
 import os
+import re
+from typing import Dict, List
 
 import google.generativeai as genai
 from dotenv import load_dotenv
@@ -11,107 +13,104 @@ GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
 
 class GeminiService:
     def __init__(self):
-        if not GOOGLE_API_KEY:
-            raise ValueError("GOOGLE_API_KEY not found in environment variables")
+        """Initialize the Gemini service with API key from environment"""
+        api_key = os.environ.get("GOOGLE_API_KEY")
+        if not api_key:
+            raise ValueError("GOOGLE_API_KEY environment variable not set")
         
-        genai.configure(api_key=GOOGLE_API_KEY)
+        # Configure the Gemini API
+        genai.configure(api_key=api_key)
         
-        # Configure the model
-        self.model = genai.GenerativeModel('gemini-pro')
+        # Get available models
+        try:
+            self.model = genai.GenerativeModel('gemini-pro')
+            print("Successfully connected to Gemini API")
+        except Exception as e:
+            print(f"Error connecting to Gemini API: {e}")
+            raise
+        
         self.vector_store = VectorStoreService()
         
-    def generate_response(self, user_query, context, relevant_chunks):
+    def generate_response(self, query: str, context: str, sources: List[Dict]) -> str:
         """
-        Generate a response using Google's Gemini model
+        Generate a response using Gemini based on the query and context
         
         Args:
-            user_query (str): The user's question
-            context (str): Context from relevant document chunks
-            relevant_chunks (list): List of document chunks with metadata
+            query: User's question
+            context: Text content from relevant chunks
+            sources: List of source metadata for citation
         
         Returns:
-            str: The generated response
+            Generated response with citations
         """
-        # Organize chunks by book to detect conflicts
-        books_info = {}
-        has_multiple_books = False
-        
-        # Create citations for the sources with page numbers
-        citations = []
-        for i, chunk in enumerate(relevant_chunks):
-            clean_book_name = chunk.get('clean_book_name', chunk['book'])
-            page = chunk.get('page', 'N/A')
-            
-            # Track books for conflict detection
-            if clean_book_name not in books_info:
-                books_info[clean_book_name] = []
-            books_info[clean_book_name].append({
-                'page': page,
-                'text': chunk['text'],
-                'citation_idx': i+1
-            })
-            
-            # Create citation
-            if page != 'N/A':
-                citation = f"[{i+1}] {clean_book_name}, página {page}"
-            else:
-                citation = f"[{i+1}] {clean_book_name}"
-                
-            citations.append(citation)
-        
-        citations_text = "\n".join(citations)
-        has_multiple_books = len(books_info.keys()) > 1
-        
-        # Determine if we should highlight potential conflicts
-        conflict_instruction = ""
-        if has_multiple_books:
-            conflict_instruction = """
-            IMPORTANTE: La información proviene de diferentes libros que podrían contener información contradictoria.
-            Si detectas contradicciones entre las fuentes:
-            1. Señala explícitamente las diferencias
-            2. Presenta ambas perspectivas con sus respectivas citas
-            3. No intentes reconciliar información contradictoria, solo presenta las diferentes perspectivas
-            """
-        
-        # Create system prompt with instructions
-        system_prompt = f"""
-        You are Faro, a helpful librarian assistant. Answer questions in Spanish based ONLY on the provided context.
-        
-        Guidelines:
-        - If you don't know the answer based on the context, say "No tengo suficiente información para responder a esa pregunta"
-        - Include citations in your responses using [1], [2], etc. that match the source numbers provided
-        - ALWAYS include page numbers in your citations when available
-        - For example: "Según el libro X, página Y [Z]..."
-        - Keep answers concise and focused on the question
-        - Always respond in Spanish
-        - Do not make up information not included in the context
-        
-        {conflict_instruction}
-        
-        Context:
-        {context}
-        
-        Sources:
-        {citations_text}
-        """
-        
-        # Generate response
         try:
-            response = self.model.generate_content(
-                [system_prompt, user_query],
-                generation_config={
-                    'temperature': 0.2,
-                    'top_p': 0.8,
-                    'top_k': 40,
-                    'max_output_tokens': 800,
-                }
-            )
+            # Create a prompt with the context and query
+            prompt = f"""
+            Tu tarea es responder a la pregunta del usuario basándote en la información proporcionada.
+            Si la información para responder no está en el contexto, indica que no tienes suficiente información.
+            Usa solo la información proporcionada en el contexto.
             
-            return response.text
+            CONTEXTO:
+            {context}
+            
+            PREGUNTA:
+            {query}
+            
+            INSTRUCCIONES IMPORTANTES:
+            - Responde en español.
+            - Proporciona una respuesta clara y concisa.
+            - Si mencionas información del contexto, incluye una referencia al origen usando [número].
+            - Al final de tu respuesta, enumera las fuentes utilizadas con el formato:
+              Fuentes:
+              [1] Nombre del libro, página X
+              [2] Nombre del libro, página Y
+              etc.
+            """
+            
+            # Generate response
+            response = self.model.generate_content(prompt)
+            answer = response.text
+            
+            # Process the answer to add proper citation links
+            answer = self._format_citations(answer, sources)
+            
+            return answer
             
         except Exception as e:
             print(f"Error generating response: {e}")
-            return "Lo siento, ha ocurrido un error al procesar tu pregunta. Por favor, inténtalo de nuevo."
+            return f"Lo siento, ocurrió un error al generar la respuesta: {str(e)}"
+    
+    def _format_citations(self, text: str, sources: List[Dict]) -> str:
+        """Format the citations in the text with proper links to sources"""
+        # Replace citation markers with clickable spans
+        citation_pattern = r'\[(\d+)\]'
+        
+        processed_text = text
+        
+        # Find all citations
+        citations = re.findall(citation_pattern, text)
+        
+        # Create source mapping
+        source_map = {}
+        for idx, citation_num in enumerate(set(citations)):
+            if idx < len(sources):
+                source = sources[idx]
+                book_name = source["book"].split("_")[0]  # Remove UUID part
+                page = source["page"]
+                source_map[citation_num] = {
+                    "book": book_name,
+                    "page": page,
+                    "idx": idx
+                }
+        
+        # Replace citations with clickable spans
+        for citation_num in set(citations):
+            if citation_num in source_map:
+                source = source_map[citation_num]
+                replacement = f'<span class="citation" data-source-idx="{source["idx"]}">[{citation_num}]</span>'
+                processed_text = re.sub(r'\[' + citation_num + r'\]', replacement, processed_text)
+        
+        return processed_text
     
     def process_file(self, file_path):
         """Process a newly uploaded file and add it to the vector store"""

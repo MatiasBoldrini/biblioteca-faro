@@ -16,196 +16,153 @@ class DocumentService:
     def __init__(self):
         self.base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         self.books_dir = os.path.join(self.base_dir, 'books')
+        self.chunk_size = 1000  # characters per chunk
+        self.chunk_overlap = 200  # overlap between chunks
+        
+        # Create books directory if it doesn't exist
         os.makedirs(self.books_dir, exist_ok=True)
     
     def process_file(self, file_path):
-        """Process an uploaded file and save as text in books folder"""
-        file_extension = os.path.splitext(file_path)[1].lower()
+        """Process uploaded file and store in books directory"""
+        filename = os.path.basename(file_path)
+        # Add UUID to avoid filename conflicts
+        base_name = Path(filename).stem
+        extension = Path(filename).suffix
+        unique_filename = f"{base_name}_{uuid.uuid4().hex[:8]}{extension}"
         
-        # Generate a unique filename for the processed text
-        original_filename = os.path.basename(file_path)
-        safe_name = re.sub(r'[^\w\-.]', '_', original_filename)
-        base_name = os.path.splitext(safe_name)[0]
-        book_id = str(uuid.uuid4())[:8]
-        output_filename = f"{base_name}_{book_id}.txt"
-        output_path = os.path.join(self.books_dir, output_filename)
+        destination = os.path.join(self.books_dir, unique_filename)
+        shutil.copy2(file_path, destination)
         
-        # Extract text based on file type
-        if file_extension == '.pdf':
-            text = self._extract_text_from_pdf(file_path)
-        elif file_extension == '.txt':
-            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                text = f.read()
-        elif file_extension in ['.doc', '.docx']:
-            text = self._extract_text_from_docx(file_path)
-        else:
-            raise ValueError(f"Unsupported file type: {file_extension}")
-        
-        # Save processed text to books directory
-        with open(output_path, 'w', encoding='utf-8') as f:
-            f.write(text)
-        
-        print(f"Processed {original_filename} and saved as {output_filename}")
-        return output_path
-    
-    def _extract_text_from_pdf(self, file_path):
-        """Extract text from PDF with page numbers"""
-        doc = fitz.open(file_path)
-        text = ""
-        
-        for page_num in range(len(doc)):
-            page = doc[page_num]
-            page_text = page.get_text()
-            
-            # Add page marker at the beginning of each page
-            page_marker = f"\n\n[PAGE:{page_num+1}]\n\n"
-            
-            # If page has very little text, it might be scanned - try OCR
-            if len(page_text.strip()) < 50:
-                print(f"Using OCR for page {page_num+1} of {file_path}")
-                # Get page as image
-                pix = page.get_pixmap(alpha=False)
-                img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-                
-                # Use OCR to extract text
-                ocr_text = pytesseract.image_to_string(img, lang='eng+spa')
-                text += page_marker + ocr_text
-            else:
-                text += page_marker + page_text
-        
-        return text
-    
-    def _extract_text_from_docx(self, file_path):
-        """Extract text from DOCX file with approximate page tracking"""
-        try:
-            doc = docx.Document(file_path)
-            full_text = ""
-            
-            # Approximate page breaks (rough estimate)
-            chars_per_page = 3000
-            char_count = 0
-            page_num = 1
-            
-            for paragraph in doc.paragraphs:
-                if char_count > chars_per_page:
-                    full_text += f"\n\n[PAGE:{page_num}]\n\n"
-                    page_num += 1
-                    char_count = 0
-                
-                full_text += paragraph.text + "\n"
-                char_count += len(paragraph.text)
-            
-            return full_text
-        except Exception as e:
-            # For older .doc files or issues with docx
-            print(f"Error processing docx: {e}, trying OCR")
-            # Convert to PDF and then use PDF extraction
-            return self._convert_and_extract(file_path)
-    
-    def _convert_and_extract(self, file_path):
-        """Fallback method for difficult document formats"""
-        # This would ideally use a library like LibreOffice via subprocess
-        # For now, we'll return a placeholder message
-        return f"Error: Could not extract text from {os.path.basename(file_path)}"
+        print(f"Processed file: {filename} -> {destination}")
+        return destination
     
     def get_all_books(self):
-        """Get paths to all books in the books directory"""
-        return [os.path.join(self.books_dir, f) for f in os.listdir(self.books_dir) 
-                if os.path.isfile(os.path.join(self.books_dir, f)) and f.endswith('.txt')]
-    
-    def extract_text_with_metadata(self, file_path):
-        """Extract text from a file and break into chunks with metadata"""
-        try:
-            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                text = f.read()
-        except Exception as e:
-            print(f"Error reading file {file_path}: {e}")
+        """Return list of all book files in the books directory"""
+        if not os.path.exists(self.books_dir):
             return []
         
-        # Get basic metadata
-        filename = os.path.basename(file_path)
-        book_name = os.path.splitext(filename)[0]
+        all_files = []
+        for file in os.listdir(self.books_dir):
+            file_path = os.path.join(self.books_dir, file)
+            if os.path.isfile(file_path) and file.lower().endswith(('.pdf', '.txt', '.doc', '.docx')):
+                all_files.append(file_path)
         
-        # Extract pages
-        chunks = []
-        page_pattern = r'\[PAGE:(\d+)\]\s*\n*\s*(.*?)(?=\[PAGE:|\Z)'
-        page_matches = re.finditer(page_pattern, text, re.DOTALL)
+        return all_files
+    
+    def extract_text_with_metadata(self, file_path):
+        """Extract text from file with metadata (page numbers, etc.)"""
+        file_extension = os.path.splitext(file_path)[1].lower()
+        book_name = os.path.basename(file_path)
         
-        pages_data = []
-        for match in page_matches:
-            page_num = int(match.group(1))
-            page_text = match.group(2).strip()
-            if page_text:  # Skip empty pages
-                pages_data.append((page_num, page_text))
-        
-        # If no page markers found (e.g., for txt files), process as a single chunk
-        if not pages_data:
-            paragraph_chunks = self._split_into_chunks(text, chunk_size=1000, overlap=150)
-            for i, chunk_text in enumerate(paragraph_chunks):
-                chunks.append({
-                    'text': chunk_text,
-                    'source': filename,
-                    'book': book_name,
-                    'page': 'N/A',
-                    'chunk': i,
-                    'total_chunks': len(paragraph_chunks)
-                })
+        if file_extension == '.pdf':
+            return self._process_pdf(file_path, book_name)
+        elif file_extension == '.txt':
+            return self._process_txt(file_path, book_name)
+        elif file_extension in ['.doc', '.docx']:
+            return self._process_docx(file_path, book_name)
         else:
-            # Process each page
-            for page_num, page_text in pages_data:
-                # Split long pages into chunks
-                if len(page_text) > 1500:
-                    page_chunks = self._split_into_chunks(page_text, chunk_size=1000, overlap=150)
-                    for i, chunk_text in enumerate(page_chunks):
-                        chunks.append({
-                            'text': chunk_text,
-                            'source': filename,
-                            'book': book_name,
-                            'page': page_num,
-                            'chunk': i,
-                            'total_page_chunks': len(page_chunks)
-                        })
-                else:
-                    # Short page - use as a single chunk
-                    chunks.append({
-                        'text': page_text,
-                        'source': filename,
-                        'book': book_name,
-                        'page': page_num,
-                        'chunk': 0,
-                        'total_page_chunks': 1
-                    })
+            raise ValueError(f"Unsupported file format: {file_extension}")
+    
+    def _process_pdf(self, file_path, book_name):
+        """Extract text from PDF file with page numbers"""
+        chunks = []
+        try:
+            doc = fitz.open(file_path)
+            full_text = ""
+            
+            for page_num, page in enumerate(doc):
+                # Try to get text directly
+                page_text = page.get_text()
+                
+                # If the page has very little text, it might be a scanned image
+                # Try OCR if the page text is too short
+                if len(page_text.strip()) < 100:
+                    try:
+                        # Convert page to image
+                        pix = page.get_pixmap()
+                        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                        # Use pytesseract for OCR
+                        page_text = pytesseract.image_to_string(img)
+                    except Exception as e:
+                        print(f"OCR failed for page {page_num+1}: {e}")
+                
+                # Clean text (remove excessive whitespace)
+                page_text = re.sub(r'\s+', ' ', page_text).strip()
+                
+                if page_text:
+                    # Add page metadata
+                    full_text += f"\n\n[PAGE {page_num+1}]\n{page_text}"
+            
+            # Create chunks with page information
+            chunks = self._create_chunks_with_metadata(full_text, book_name)
+            
+        except Exception as e:
+            print(f"Error processing PDF {file_path}: {e}")
         
         return chunks
     
-    def _split_into_chunks(self, text, chunk_size=1000, overlap=150):
-        """Split text into overlapping chunks of approximately chunk_size characters"""
-        # Clean and normalize text
-        text = re.sub(r'\s+', ' ', text).strip()
-        
-        if len(text) <= chunk_size:
-            return [text]
-        
+    def _process_txt(self, file_path, book_name):
+        """Extract text from TXT file"""
+        try:
+            with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+                text = f.read()
+            return self._create_chunks_with_metadata(text, book_name)
+        except Exception as e:
+            print(f"Error processing TXT {file_path}: {e}")
+            return []
+    
+    def _process_docx(self, file_path, book_name):
+        """Extract text from DOCX file"""
+        try:
+            doc = docx.Document(file_path)
+            full_text = "\n\n".join([para.text for para in doc.paragraphs])
+            return self._create_chunks_with_metadata(full_text, book_name)
+        except Exception as e:
+            print(f"Error processing DOCX {file_path}: {e}")
+            return []
+    
+    def _create_chunks_with_metadata(self, text, book_name):
+        """Split text into chunks with overlapping and track page numbers"""
         chunks = []
-        start = 0
         
-        while start < len(text):
-            # Find a good breaking point near chunk_size
-            end = min(start + chunk_size, len(text))
-            
-            # Try to break at paragraph or sentence
-            if end < len(text):
-                # Look for paragraph break
-                paragraph_break = text.rfind('\n\n', start, end)
-                if paragraph_break != -1 and paragraph_break > start + 0.5 * chunk_size:
-                    end = paragraph_break
+        # Find page markers
+        page_pattern = r"\[PAGE (\d+)\]"
+        current_page = "N/A"
+        
+        # Remove the page markers and keep track of their positions
+        page_positions = {}
+        for match in re.finditer(page_pattern, text):
+            page_num = match.group(1)
+            position = match.start()
+            page_positions[position] = page_num
+        
+        # Remove the page markers from the text
+        clean_text = re.sub(page_pattern, "", text)
+        
+        # Create chunks
+        start = 0
+        while start < len(clean_text):
+            # Determine current page for this position
+            current_page = "N/A"
+            for pos, page in sorted(page_positions.items()):
+                if pos <= start:
+                    current_page = page
                 else:
-                    # Look for sentence break (period followed by space)
-                    sentence_break = text.rfind('. ', start, end)
-                    if sentence_break != -1 and sentence_break > start + 0.5 * chunk_size:
-                        end = sentence_break + 1  # Include the period
+                    break
             
-            chunks.append(text[start:end].strip())
-            start = max(start + chunk_size - overlap, end - overlap)
+            # Get chunk
+            end = start + self.chunk_size
+            chunk_text = clean_text[start:end]
+            
+            # Only add non-empty chunks
+            if chunk_text.strip():
+                chunks.append({
+                    "text": chunk_text.strip(),
+                    "page": current_page,
+                    "book": book_name
+                })
+            
+            # Move start position for next chunk (with overlap)
+            start = end - self.chunk_overlap
         
         return chunks
