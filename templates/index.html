@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Biblioteca Faro</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+
+        .header {
+            background-color: #0d6efd;
+            color: white;
+            padding: 20px 0;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .chat-container {
+            height: 500px;
+            overflow-y: auto;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            background-color: white;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .user-message {
+            background-color: #0d6efd;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 15px;
+            margin-bottom: 10px;
+            max-width: 80%;
+            margin-left: auto;
+        }
+
+        .assistant-message {
+            background-color: #f1f1f1;
+            padding: 10px 15px;
+            border-radius: 15px;
+            margin-bottom: 10px;
+            max-width: 80%;
+        }
+
+        .sources {
+            font-size: 0.8em;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+
+        .spinner-border {
+            width: 1.5rem;
+            height: 1.5rem;
+        }
+
+        .upload-area {
+            border: 2px dashed #0d6efd;
+            border-radius: 5px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            background-color: #f8f9fa;
+            transition: background-color 0.3s;
+        }
+
+        .upload-area:hover {
+            background-color: #e9ecef;
+        }
+
+        .citation {
+            color: #0d6efd;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <div class="container">
+            <h1>Biblioteca Faro</h1>
+            <p>Tu asistente de biblioteca inteligente</p>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="row">
+            <div class="col-md-8">
+                <!-- Chat interface -->
+                <div class="chat-container" id="chatContainer">
+                    <div class="assistant-message">
+                        Hola, soy Faro, tu asistente de biblioteca. Puedo responder preguntas basadas en los documentos
+                        que hayas subido. ¿En qué puedo ayudarte hoy?
+                    </div>
+                </div>
+
+                <!-- Input form -->
+                <div class="input-group mb-3">
+                    <input type="text" class="form-control" id="queryInput" placeholder="Escribe tu pregunta...">
+                    <button class="btn btn-primary" type="button" id="sendButton">
+                        <span class="spinner-border spinner-border-sm d-none" id="querySpinner" role="status"
+                            aria-hidden="true"></span>
+                        Enviar
+                    </button>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <!-- File upload -->
+                <div class="card mb-4">
+                    <div class="card-header">Subir Documentos</div>
+                    <div class="card-body">
+                        <div class="upload-area" id="uploadArea">
+                            <div>Arrastra y suelta archivos aquí<br>o haz clic para seleccionar</div>
+                            <input type="file" id="fileInput" style="display:none;" accept=".pdf,.txt,.doc,.docx">
+                        </div>
+                        <div class="progress mt-3 d-none" id="uploadProgress">
+                            <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+                        </div>
+                        <div id="uploadStatus" class="mt-2 text-center"></div>
+                    </div>
+                </div>
+
+                <!-- Management tools -->
+                <div class="card">
+                    <div class="card-header">Herramientas</div>
+                    <div class="card-body">
+                        <button class="btn btn-outline-secondary w-100 mb-2" id="reindexButton">
+                            <span class="spinner-border spinner-border-sm d-none" id="reindexSpinner" role="status"
+                                aria-hidden="true"></span>
+                            Reindexar Documentos
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const chatContainer = document.getElementById('chatContainer');
+            const queryInput = document.getElementById('queryInput');
+            const sendButton = document.getElementById('sendButton');
+            const uploadArea = document.getElementById('uploadArea');
+            const fileInput = document.getElementById('fileInput');
+            const uploadProgress = document.getElementById('uploadProgress');
+            const progressBar = uploadProgress.querySelector('.progress-bar');
+            const uploadStatus = document.getElementById('uploadStatus');
+            const reindexButton = document.getElementById('reindexButton');
+            const querySpinner = document.getElementById('querySpinner');
+            const reindexSpinner = document.getElementById('reindexSpinner');
+
+            // Query handling
+            sendButton.addEventListener('click', sendQuery);
+            queryInput.addEventListener('keypress', function (e) {
+                if (e.key === 'Enter') sendQuery();
+            });
+
+            function sendQuery() {
+                const query = queryInput.value.trim();
+                if (!query) return;
+
+                // Disable input during processing
+                queryInput.disabled = true;
+                sendButton.disabled = true;
+                querySpinner.classList.remove('d-none');
+
+                // Display user message
+                appendMessage(query, 'user');
+                queryInput.value = '';
+
+                // Send to backend
+                fetch('/query', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ query: query }),
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            appendMessage(data.answer, 'assistant', data.chunks);
+                        } else {
+                            appendMessage('Error: ' + data.message, 'assistant');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        appendMessage('Lo siento, ocurrió un error al procesar tu pregunta.', 'assistant');
+                    })
+                    .finally(() => {
+                        // Re-enable input
+                        queryInput.disabled = false;
+                        sendButton.disabled = false;
+                        querySpinner.classList.add('d-none');
+                        queryInput.focus();
+                    });
+            }
+
+            function appendMessage(text, sender, chunks = null) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = sender === 'user' ? 'user-message' : 'assistant-message';
+
+                // Format citations if present
+                if (sender === 'assistant') {
+                    // Replace [number] with clickable citations
+                    let formattedText = text.replace(/\[(\d+)\]/g, '<span class="citation" data-citation="$1">[$1]</span>');
+                    messageDiv.innerHTML = formattedText;
+                } else {
+                    messageDiv.textContent = text;
+                }
+
+                // Add source information for assistant messages
+                if (sender === 'assistant' && chunks && chunks.length > 0) {
+                    const sourcesDiv = document.createElement('div');
+                    sourcesDiv.className = 'sources';
+                    sourcesDiv.innerHTML = '<strong>Fuentes:</strong>';
+
+                    const sourcesList = document.createElement('ol');
+                    sourcesList.className = 'mb-0 ps-3 mt-1';
+
+                    chunks.forEach((chunk, index) => {
+                        const sourceItem = document.createElement('li');
+                        const bookName = chunk.clean_book_name || chunk.book;
+                        sourceItem.textContent = `${bookName}${chunk.page !== 'N/A' ? ', página ' + chunk.page : ''}`;
+                        sourcesList.appendChild(sourceItem);
+                    });
+
+                    sourcesDiv.appendChild(sourcesList);
+                    messageDiv.appendChild(sourcesDiv);
+                }
+
+                chatContainer.appendChild(messageDiv);
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            }
+
+            // File upload handling
+            uploadArea.addEventListener('click', () => {
+                fileInput.click();
+            });
+
+            uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadArea.style.backgroundColor = '#e9ecef';
+            });
+
+            uploadArea.addEventListener('dragleave', () => {
+                uploadArea.style.backgroundColor = '#f8f9fa';
+            });
+
+            uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadArea.style.backgroundColor = '#f8f9fa';
+
+                if (e.dataTransfer.files.length) {
+                    handleFileUpload(e.dataTransfer.files[0]);
+                }
+            });
+
+            fileInput.addEventListener('change', () => {
+                if (fileInput.files.length) {
+                    handleFileUpload(fileInput.files[0]);
+                }
+            });
+
+            function handleFileUpload(file) {
+                // Check file type
+                const fileExtension = file.name.split('.').pop().toLowerCase();
+                if (!['pdf', 'txt', 'doc', 'docx'].includes(fileExtension)) {
+                    uploadStatus.innerHTML = '<span class="text-danger">Tipo de archivo no soportado. Use PDF, TXT, DOC o DOCX.</span>';
+                    return;
+                }
+
+                // Prepare form data
+                const formData = new FormData();
+                formData.append('file', file);
+
+                // Show progress
+                uploadProgress.classList.remove('d-none');
+                uploadStatus.innerHTML = '<span class="text-primary">Subiendo archivo...</span>';
+                progressBar.style.width = '0%';
+                progressBar.textContent = '0%';
+
+                // Upload file
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', '/upload', true);
+
+                xhr.upload.onprogress = function (e) {
+                    if (e.lengthComputable) {
+                        const percentComplete = Math.round((e.loaded / e.total) * 100);
+                        progressBar.style.width = percentComplete + '%';
+                        progressBar.textContent = percentComplete + '%';
+                    }
+                };
+
+                xhr.onload = function () {
+                    if (xhr.status === 200) {
+                        const response = JSON.parse(xhr.responseText);
+                        if (response.success) {
+                            uploadStatus.innerHTML = '<span class="text-success">' + response.message + '</span>';
+                            appendMessage(`He procesado exitosamente el archivo "${response.filename}". Ahora puedes hacerme preguntas sobre su contenido.`, 'assistant');
+                        } else {
+                            uploadStatus.innerHTML = '<span class="text-danger">' + response.message + '</span>';
+                        }
+                    } else {
+                        uploadStatus.innerHTML = '<span class="text-danger">Error en la subida. Intente de nuevo.</span>';
+                    }
+
+                    // Reset file input
+                    fileInput.value = '';
+                };
+
+                xhr.send(formData);
+            }
+
+            // Reindex functionality
+            reindexButton.addEventListener('click', function () {
+                if (confirm('¿Estás seguro de que deseas reindexar todos los documentos? Este proceso puede tomar tiempo.')) {
+                    reindexButton.disabled = true;
+                    reindexSpinner.classList.remove('d-none');
+
+                    fetch('/reindex', {
+                        method: 'POST',
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                alert(data.message);
+                            } else {
+                                alert('Error: ' + data.message);
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                            alert('Error al reindexar documentos.');
+                        })
+                        .finally(() => {
+                            reindexButton.disabled = false;
+                            reindexSpinner.classList.add('d-none');
+                        });
+                }
+            });
+        });
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>
