@@ -14,16 +14,15 @@ GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
 class GeminiService:
     def __init__(self):
         """Initialize the Gemini service with API key from environment"""
-        api_key = os.environ.get("GOOGLE_API_KEY")
-        if not api_key:
-            raise ValueError("GOOGLE_API_KEY environment variable not set")
-        
         # Configure the Gemini API
-        genai.configure(api_key=api_key)
+        genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
         
         # Get available models
         try:
-            self.model = genai.GenerativeModel('gemini-pro')
+            self.model = genai.GenerativeModel(
+                'models/gemini-2.0-flash-lite-preview-02-05',
+                generation_config={'temperature': 0.3}  # Default temperature
+            )
             print("Successfully connected to Gemini API")
         except Exception as e:
             print(f"Error connecting to Gemini API: {e}")

@@ -11,8 +11,8 @@ genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
 
 # 1. Procesar contexto largo con Gemini 1.5 Pro
 long_context_model = genai.GenerativeModel(
-    'models/gemini-1.5-pro-latest',
-    generation_config={'temperature': 0.8}  # Default temperature
+    'models/gemini-2.0-flash-lite-preview-02-05',
+    generation_config={'temperature': 0.3}  # Default temperature
 )
 response = long_context_model.generate_content(
     f"""Aquí va tu contexto largo (hasta 2M tokens). 

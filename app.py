@@ -7,9 +7,13 @@ from flask import (Flask, flash, jsonify, redirect, render_template, request,
                    session, url_for)
 from werkzeug.utils import secure_filename
 
+from config.init_config import init_environment
 from services.document_service import DocumentService
 from services.gemini_service import GeminiService
 from services.vector_store_service import VectorStoreService
+
+# Initialize environment before anything else
+init_environment()
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'biblioteca-faro-secret')
