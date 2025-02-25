@@ -18,6 +18,7 @@ class DocumentService:
         self.books_dir = os.path.join(self.base_dir, 'books')
         self.chunk_size = 1000  # characters per chunk
         self.chunk_overlap = 200  # overlap between chunks
+        self.max_chunk_size = 1500  # absolute maximum size for any chunk
         
         # Create books directory if it doesn't exist
         os.makedirs(self.books_dir, exist_ok=True)
@@ -122,61 +123,148 @@ class DocumentService:
             return []
     
     def _create_chunks_with_metadata(self, text, book_name):
-        """Split text into chunks with overlapping and track page numbers"""
+        """Split text into chunks respecting paragraph boundaries when possible"""
         chunks = []
         
-        # Patrón para detectar marcadores de página:
-        # - [PAGE número]
-        # - página número (aceptando acento)
-        # - un número en línea sola
-        # - dos números separados por guión en línea sola (se toma el primero)
+        # Patrón para detectar marcadores de página
         page_pattern = (
-            r"(?:\[PAGE (\d+)\])|"
-            r"(?:p[aá]gina\s+(\d+))|"
-            r"(?:\n\s*(\d+)\s*\n)|"
-            r"(?:\n\s*(\d+)-\d+\s*\n)"
+            r"(?:\[PAGE (\d+)\])|"            # [PAGE número]
+            r"(?:p[aá]gina\s+(\d+))|"         # página número
+            # r"(?:\n\s*(\d+)\s*\n)|"           # \n número \n
+            # r"(?:\n\s*(\d+)-\d+\s*\n)|"       # \n número-numero \n
+            r"(?:^(\d+)-\d+\n)|"              # número-numero\n (sin espacio a la izquierda)
+            # r"(?:^(\d+)-\d+\s*\n)"            # número-numero\n (con o sin espacio a la izquierda)
         )
         
+        # Potenciales marcadores de sección (encabezados)
+        section_pattern = r"\n\s*(?:[A-Z0-9\s]{2,}:?|[IVX]+\.|\d+\.\d+\.|\d+\.)\s*\n"
+        
+        # Track page numbers and their positions
         page_positions = {}
         for match in re.finditer(page_pattern, text, flags=re.IGNORECASE):
             page_num = None
-            if match.group(1):
-                page_num = match.group(1)
-            elif match.group(2):
-                page_num = match.group(2)
-            elif match.group(3):
-                page_num = match.group(3)
-            elif match.group(4):
-                page_num = match.group(4)
+            for g in match.groups():
+                if g:
+                    page_num = g
+                    break
+                
             
-            # Guarda la posición del marcador para asignarlo luego al chunk
-            position = match.start()
-            page_positions[position] = page_num
+            if page_num:
+                position = match.start()
+                page_positions[position] = page_num
         
-        # Elimina los marcadores de página del texto
+        # Remove page markers from text
         clean_text = re.sub(page_pattern, "", text, flags=re.IGNORECASE)
         
-        # Creación de chunks
-        start = 0
-        while start < len(clean_text):
-            # Determina la página actual para esta posición
-            current_page = "N/A"
-            for pos, page in sorted(page_positions.items()):
-                if pos <= start:
-                    current_page = page
+        # Split text into paragraphs
+        paragraphs = re.split(r'\n\s*\n', clean_text)
+        
+        current_chunk = ""
+        current_position = 0
+        processed_length = 0
+        
+        for paragraph in paragraphs:
+            paragraph = paragraph.strip()
+            if not paragraph:
+                processed_length += 2  # Account for paragraph separators
+                continue
+                
+            # Check if paragraph is a section heading
+            is_section_heading = bool(re.match(section_pattern, "\n" + paragraph + "\n"))
+            
+            # If adding this paragraph would exceed chunk size or if it's a new section
+            if len(current_chunk) + len(paragraph) > self.chunk_size or is_section_heading:
+                # Save current chunk if not empty
+                if current_chunk.strip():
+                    # Determine the page for this chunk
+                    current_page = self._get_page_for_position(current_position, page_positions)
+                    chunks.append({
+                        "text": current_chunk.strip(),
+                        "page": current_page,
+                        "book": book_name
+                    })
+                
+                # Start a new chunk
+                current_chunk = paragraph
+                current_position = processed_length
+            else:
+                # Add paragraph to current chunk
+                if current_chunk:
+                    current_chunk += "\n\n" + paragraph
                 else:
-                    break
+                    current_chunk = paragraph
+                    current_position = processed_length
             
-            end = start + self.chunk_size
-            chunk_text = clean_text[start:end]
+            processed_length += len(paragraph) + 2  # +2 for paragraph separators
             
-            if chunk_text.strip():
-                chunks.append({
-                    "text": chunk_text.strip(),
-                    "page": current_page,
-                    "book": book_name
-                })
-            
-            start = end - self.chunk_overlap
+            # Handle paragraphs that are longer than chunk_size
+            if len(paragraph) > self.max_chunk_size:
+                # Try to split by sentences
+                sentences = re.split(r'(?<=[.!?])\s+', paragraph)
+                temp_chunk = ""
+                sentence_position = current_position
+                
+                for sentence in sentences:
+                    if len(temp_chunk) + len(sentence) > self.max_chunk_size:
+                        if temp_chunk:
+                            # Save the accumulated sentences
+                            current_page = self._get_page_for_position(sentence_position, page_positions)
+                            chunks.append({
+                                "text": temp_chunk.strip(),
+                                "page": current_page,
+                                "book": book_name
+                            })
+                            
+                            # Reset for new chunk
+                            sentence_position += len(temp_chunk)
+                            temp_chunk = sentence
+                        else:
+                            # Handle extremely long sentences by character splitting
+                            for i in range(0, len(sentence), self.max_chunk_size):
+                                sub_sentence = sentence[i:i + self.max_chunk_size]
+                                if sub_sentence.strip():
+                                    sub_position = sentence_position + i
+                                    current_page = self._get_page_for_position(sub_position, page_positions)
+                                    chunks.append({
+                                        "text": sub_sentence.strip(),
+                                        "page": current_page,
+                                        "book": book_name
+                                    })
+                    else:
+                        if temp_chunk:
+                            temp_chunk += " " + sentence
+                        else:
+                            temp_chunk = sentence
+                
+                # Add the last chunk if not empty
+                if temp_chunk.strip():
+                    current_page = self._get_page_for_position(sentence_position, page_positions)
+                    chunks.append({
+                        "text": temp_chunk.strip(),
+                        "page": current_page,
+                        "book": book_name
+                    })
+                
+                # Reset current chunk since we've handled this long paragraph
+                current_chunk = ""
+        
+        # Don't forget the last chunk
+        if current_chunk.strip():
+            current_page = self._get_page_for_position(current_position, page_positions)
+            chunks.append({
+                "text": current_chunk.strip(),
+                "page": current_page,
+                "book": book_name
+            })
         
         return chunks
+    
+    def _get_page_for_position(self, position, page_positions):
+        """Determine the page number for a given position in the text"""
+        current_page = "N/A"
+        for pos, page in sorted(page_positions.items()):
+            if pos <= position:
+                current_page = page
+            else:
+                break
+        return current_page

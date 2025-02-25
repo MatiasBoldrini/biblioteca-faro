@@ -20,7 +20,7 @@ class GeminiService:
         # Get available models
         try:
             self.model = genai.GenerativeModel(
-                'models/gemini-2.0-flash-lite-preview-02-05',
+                'models/gemini-2.0-flash-lite',
                 generation_config={'temperature': 0.3}  # Default temperature
             )
             print("Successfully connected to Gemini API")
@@ -43,39 +43,39 @@ class GeminiService:
             Generated response with citations
         """
         try:
+            # Verificar si hay resultados relevantes
+            if not sources or not any(source['score'] > 0.2 for source in sources):
+                return "No encontré información suficientemente relevante para responder a tu pregunta específica. ¿Podrías reformularla o ser más específico?"
+
             # Reformatear el contexto para resaltar mejor las fuentes y páginas
             formatted_sources = []
             for i, source in enumerate(sources):
-                book_name = source["book"].split("_")[0]  # Quitar el UUID
-                page_num = source["page"]
-                text = source["text"]
-                # Aquí es donde explícitamente incluimos el número de página en el contexto
-                formatted_sources.append(f"[FUENTE {i+1}] {book_name}, página {page_num}\n{text}")
+                if source['score'] > 0.2:  # Solo incluir fuentes relevantes
+                    book_name = source["book"].split("_")[0]
+                    page_num = source["page"]
+                    text = source["text"].strip()
+                    formatted_sources.append(f"[FUENTE {i+1}] De '{book_name}', página {page_num}:\n{text}")
             
             formatted_context = "\n\n".join(formatted_sources)
             
-            # Create a prompt with the context and query, including explicit instructions
             prompt = f"""
-            Tu tarea es responder a la pregunta del usuario basándote ÚNICAMENTE en la información proporcionada.
-            Si la información para responder no está en el contexto, indica que no tienes suficiente información.
+            Eres un asistente especializado en responder preguntas basándote en la documentación proporcionada.
             
-            CONTEXTO:
+            CONTEXTO RELEVANTE:
             {formatted_context}
             
-            PREGUNTA:
+            PREGUNTA DEL USUARIO:
             {query}
             
             INSTRUCCIONES IMPORTANTES:
-            - Responde en español de manera clara y concisa.
-            - CADA VEZ que uses información del contexto, debes citar la fuente exacta usando el formato [FUENTE X] donde X es el número de la fuente.
-            - Asegúrate de mencionar el número de página exacto como aparece en el contexto (por ejemplo: "página 1-22", "página 4-32").
-            - Al final de tu respuesta, incluye una sección de "Fuentes:" con la lista completa de fuentes utilizadas:
-              
-              Fuentes:
-              [1] Nombre del libro, página X-X
-              [2] Nombre del libro, página X-X
-              
-            - NO INVENTES información ni números de página que no estén en el contexto.
+            1. SOLO uses la información proporcionada en el CONTEXTO RELEVANTE.
+            2. Si el contexto no contiene información suficiente para responder la pregunta específica, indica claramente qué parte de la pregunta no puedes responder.
+            3. Cita SIEMPRE tus fuentes usando el formato [FUENTE X].
+            4. Incluye los números de página en las citas.
+            5. Al final, lista las fuentes utilizadas.
+            
+            Responde de manera clara y directa, citando las fuentes específicas para cada parte de tu respuesta.
+            Si el contexto contiene información parcial, proporciona la parte que puedas responder e indica qué información falta.
             """
             
             # Generate response

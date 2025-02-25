@@ -33,13 +33,16 @@ class VectorStoreService:
         """Load existing index and metadata if available"""
         try:
             if os.path.exists(self.index_file) and os.path.exists(self.metadata_file):
-                with open(self.index_file, 'rb') as f:
-                    self.index = pickle.load(f)
+                # Load FAISS index
+                self.index = faiss.read_index(self.index_file)
+                
+                # Load metadata
                 with open(self.metadata_file, 'rb') as f:
                     self.metadata = pickle.load(f)
-                print(f"Loaded index with {self.index.ntotal} vectors and {len(self.metadata)} metadata entries")
+                
+                print(f"Loaded index with {self.index.ntotal} vectors")
             else:
-                print("No existing index found. Creating a new one.")
+                print("No existing index found, creating a new one")
                 self._create_empty_index()
         except Exception as e:
             print(f"Error loading index: {e}")
@@ -48,18 +51,21 @@ class VectorStoreService:
     def _create_empty_index(self):
         """Create an empty FAISS index"""
         # Using L2 distance for cosine similarity (after normalization)
-        dimension = 384  # Default for multilingual-MiniLM model
-        self.index = faiss.IndexFlatIP(dimension)  # Inner product for cosine similarity
+        dimension = 768  # Dimension for mpnet model
+        self.index = faiss.IndexFlatIP(dimension)
         self.metadata = []
     
     def _save_index(self):
         """Save the index and metadata to disk"""
         try:
-            with open(self.index_file, 'wb') as f:
-                pickle.dump(self.index, f)
+            # Save FAISS index
+            faiss.write_index(self.index, self.index_file)
+            
+            # Save metadata
             with open(self.metadata_file, 'wb') as f:
                 pickle.dump(self.metadata, f)
-            print(f"Saved index with {self.index.ntotal} vectors and {len(self.metadata)} metadata entries")
+            
+            print(f"Saved index with {self.index.ntotal} vectors")
         except Exception as e:
             print(f"Error saving index: {e}")
     
@@ -76,80 +82,109 @@ class VectorStoreService:
         texts = [chunk['text'] for chunk in chunks]
         embeddings = self.embedding_service.get_embeddings(texts)
         
-        # Normalize embeddings for cosine similarity
-        norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
-        normalized_embeddings = embeddings / norms
+        # Add to FAISS index (embeddings are already normalized by the service)
+        self.index.add(np.array(embeddings).astype('float32'))
         
-        # Add to FAISS index
-        self.index.add(np.array(normalized_embeddings).astype('float32'))
-        
-        # Add metadata
+        # Add metadata with exact page tracking
         start_idx = len(self.metadata)
         for i, chunk in enumerate(chunks):
-            chunk['id'] = start_idx + i
-            chunk['clean_book_name'] = chunk['book'].split('_')[0]  # Remove UUID part
-            self.metadata.append(chunk)
+            chunk_metadata = {
+                'text': chunk['text'],
+                'page': chunk['page'],
+                'book': chunk['book'],
+                'index': start_idx + i,
+                'chunk_start': chunk.get('chunk_start', 0),  # Add position tracking
+                'chunk_end': chunk.get('chunk_end', 0)
+            }
+            self.metadata.append(chunk_metadata)
         
-        # Save updated index
         self._save_index()
-        
         return len(chunks)
     
-    def search(self, query, top_k=5):
+    def search(self, query, top_k=5, similarity_threshold=0.4):
         """Search for relevant chunks using the query"""
         if not self.metadata or self.index.ntotal == 0:
-            print("No documents in the index yet")
             return []
         
-        # Get query embedding
+        # Get query embedding (already normalized by the service)
         query_embedding = self.embedding_service.get_embedding(query)
         if query_embedding is None:
             print("Could not generate embedding for query")
             return []
         
-        # Normalize for cosine similarity
-        query_embedding = query_embedding / np.linalg.norm(query_embedding)
+        # Search with normalized query - get more results initially
         query_embedding = np.array([query_embedding]).astype('float32')
+        k = min(top_k * 2, self.index.ntotal)  # Get more results initially for filtering
+        distances, indices = self.index.search(query_embedding, k)
         
-        # Search
-        distances, indices = self.index.search(query_embedding, top_k)
-        
-        # Get corresponding metadata
+        # Get corresponding metadata and filter by similarity threshold
         results = []
         for i, idx in enumerate(indices[0]):
-            if idx != -1 and idx < len(self.metadata):  # -1 indicates no match found
-                result = self.metadata[idx].copy()
-                result['score'] = float(distances[0][i])
-                results.append(result)
+            if idx < len(self.metadata):
+                score = float(distances[0][i])
+                if score > similarity_threshold:  # Only keep relevant results
+                    result = self.metadata[idx].copy()
+                    result['score'] = score
+                    results.append(result)
         
-        return results
+        # Sort by score and limit to top_k
+        results.sort(key=lambda x: x['score'], reverse=True)
+        return results[:top_k]
 
     def remove_document(self, filename):
-        """Remove document from vector store"""
-        try:
-            # Delete embeddings and metadata for the specified document
-            self.collection.delete(
-                where={"book": {"$eq": filename}}
-            )
-            print(f"Removed document {filename} from vector store")
-            return True
-        except Exception as e:
-            print(f"Error removing document from vector store: {e}")
-            return False
+        """Remove a document from the index by filename"""
+        if not self.metadata or self.index.ntotal == 0:
+            return 0
+        
+        # Find indices to remove
+        indices_to_remove = []
+        remaining_metadata = []
+        
+        for i, item in enumerate(self.metadata):
+            if item['book'] == filename:
+                indices_to_remove.append(i)
+            else:
+                remaining_metadata.append(item)
+        
+        if not indices_to_remove:
+            return 0
+            
+        # Create a new index without the removed document
+        self._create_empty_index()
+        
+        # Get embeddings to add back
+        if remaining_metadata:
+            texts = [item['text'] for item in remaining_metadata]
+            embeddings = self.embedding_service.get_embeddings(texts)
+            
+            # Normalize embeddings
+            norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+            normalized_embeddings = embeddings / norms
+            
+            # Add back to index
+            self.index.add(np.array(normalized_embeddings).astype('float32'))
+            self.metadata = remaining_metadata
+            
+            # Update index
+            self._save_index()
+        
+        return len(indices_to_remove)
 
     def reindex_all_documents(self):
         """Rebuild the index from all documents in the books directory"""
-        # Clear existing index
+        # Create empty index
         self._create_empty_index()
         
-        # Get all books
-        all_books = self.document_service.get_all_books()
-        total_chunks = 0
+        # Get all documents
+        document_service = DocumentService()
+        all_books = document_service.get_all_books()
         
+        count = 0
         for book_path in all_books:
-            chunks_added = self.add_document(book_path)
-            total_chunks += chunks_added
-            print(f"Added {chunks_added} chunks from {os.path.basename(book_path)}")
+            try:
+                num_chunks = self.add_document(book_path)
+                count += num_chunks
+            except Exception as e:
+                print(f"Error reindexing {book_path}: {e}")
         
-        print(f"Reindexing complete. Total chunks: {total_chunks}")
-        return total_chunks
+        return count

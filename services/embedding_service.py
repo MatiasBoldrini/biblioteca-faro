@@ -5,7 +5,7 @@ from sentence_transformers import SentenceTransformer
 
 
 class EmbeddingService:
-    def __init__(self, model_name='all-MiniLM-L6-v2'):
+    def __init__(self, model_name='paraphrase-multilingual-mpnet-base-v2'):
         """Initialize the embedding service with the specified model"""
         try:
             self.model = SentenceTransformer(model_name)
@@ -20,8 +20,10 @@ class EmbeddingService:
             return None
         
         try:
+            # Normalize text
+            text = text.strip().replace('\n', ' ')
             # Generate embedding
-            embedding = self.model.encode(text)
+            embedding = self.model.encode(text, normalize_embeddings=True)
             return embedding
         except Exception as e:
             print(f"Error generating embedding: {e}")
@@ -32,14 +34,14 @@ class EmbeddingService:
         if not texts:
             return []
         
-        # Filter out empty texts
-        valid_texts = [t for t in texts if t and t.strip()]
+        # Filter out empty texts and normalize
+        valid_texts = [t.strip().replace('\n', ' ') for t in texts if t and t.strip()]
         if not valid_texts:
             return []
         
         try:
-            # Generate embeddings in batch
-            embeddings = self.model.encode(valid_texts)
+            # Generate embeddings in batch with normalization
+            embeddings = self.model.encode(valid_texts, normalize_embeddings=True)
             return embeddings
         except Exception as e:
             print(f"Error generating embeddings: {e}")

@@ -107,7 +107,6 @@ def query():
         context = "\n\n".join([f"Fragmento de '{r['book']}'" + 
                               (f", página {r['page']}" if r['page'] != 'N/A' else "") + 
                               f": {r['text']}" for r in results])
-        
         # Generate response using Gemini
         answer = gemini_service.generate_response(user_query, context, results)
         

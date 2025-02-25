@@ -160,10 +160,25 @@ document.addEventListener('DOMContentLoaded', function () {
             },
             body: JSON.stringify({ query: query }),
         })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    // Intentar obtener el mensaje de error del servidor
+                    return response.json().then(errData => {
+                        throw new Error(errData.message || `Error ${response.status}: ${response.statusText}`);
+                    }).catch(err => {
+                        // Si no se puede parsear la respuesta, usar mensaje genérico
+                        throw new Error(`Error ${response.status}: No hay documentos indexados o el servidor no responde correctamente`);
+                    });
+                }
+                return response.json();
+            })
             .then(data => {
                 // Remove typing indicator
                 chatContainer.removeChild(typingIndicator);
+
+                if (!data || !data.answer) {
+                    throw new Error('La respuesta del servidor está vacía o en formato incorrecto');
+                }
 
                 // Create assistant message
                 const assistantMessageDiv = document.createElement('div');
@@ -173,17 +188,19 @@ document.addEventListener('DOMContentLoaded', function () {
                 // Add citation click handlers after the message is added to DOM
                 chatContainer.appendChild(assistantMessageDiv);
 
-                // Add click handlers for citations
-                const citations = assistantMessageDiv.querySelectorAll('.citation');
-                citations.forEach(citation => {
-                    citation.addEventListener('click', function () {
-                        const sourceIdx = this.getAttribute('data-source-idx');
-                        if (sourceIdx !== null && data.chunks && data.chunks[sourceIdx]) {
-                            const source = data.chunks[sourceIdx];
-                            showSourcePopup(source);
-                        }
+                if (data.chunks && data.chunks.length > 0) {
+                    // Add click handlers for citations
+                    const citations = assistantMessageDiv.querySelectorAll('.citation');
+                    citations.forEach(citation => {
+                        citation.addEventListener('click', function () {
+                            const sourceIdx = this.getAttribute('data-source-idx');
+                            if (sourceIdx !== null && data.chunks && data.chunks[sourceIdx]) {
+                                const source = data.chunks[sourceIdx];
+                                showSourcePopup(source);
+                            }
+                        });
                     });
-                });
+                }
 
                 // Scroll to bottom
                 chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -194,11 +211,24 @@ document.addEventListener('DOMContentLoaded', function () {
                 chatContainer.removeChild(typingIndicator);
 
                 const errorDiv = document.createElement('div');
-                errorDiv.className = 'assistant-message';
-                errorDiv.innerHTML = `<p><i class="fas fa-exclamation-triangle text-warning me-2"></i>Lo siento, ha ocurrido un error al procesar tu consulta.</p>`;
+                errorDiv.className = 'assistant-message error';
+                errorDiv.innerHTML = `
+                    <p class="error-message">
+                        <i class="fas fa-exclamation-triangle text-warning me-2"></i>
+                        ${error.message || 'Lo siento, ha ocurrido un error al procesar tu consulta. Por favor, verifica que haya documentos indexados y vuelve a intentar.'}
+                    </p>
+                    <p class="error-suggestion">
+                        Sugerencias:
+                        <ul>
+                            <li>Verifica que haya documentos cargados en el sistema</li>
+                            <li>Intenta reindexar los documentos usando el botón "Reindexar documentos"</li>
+                            <li>Si el problema persiste, contacta al administrador</li>
+                        </ul>
+                    </p>
+                `;
                 chatContainer.appendChild(errorDiv);
                 chatContainer.scrollTop = chatContainer.scrollHeight;
-                showNotification('Error al procesar la consulta', 'error');
+                showNotification('Error al procesar la consulta: ' + error.message, 'error');
             })
             .finally(() => {
                 // Hide loading indicator
@@ -206,6 +236,38 @@ document.addEventListener('DOMContentLoaded', function () {
                 sendButton.disabled = false;
             });
     }
+
+    // Add new CSS for error messages
+    const errorStyles = document.createElement('style');
+    errorStyles.innerHTML = `
+        .assistant-message.error {
+            border-left: 4px solid #dc3545;
+            background-color: rgba(220, 53, 69, 0.05);
+            padding: 15px;
+        }
+
+        .error-message {
+            color: #dc3545;
+            font-weight: 500;
+            margin-bottom: 10px;
+        }
+
+        .error-suggestion {
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .error-suggestion ul {
+            margin-top: 5px;
+            margin-bottom: 0;
+            padding-left: 20px;
+        }
+
+        .error-suggestion li {
+            margin-bottom: 5px;
+        }
+    `;
+    document.head.appendChild(errorStyles);
 
     // Format the answer with better styling
     function formatAnswer(answer) {
@@ -247,11 +309,115 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    // Simple notification function (you could enhance this with a toast library)
-    function showNotification(message, type = 'info') {
-        // You could use a library like Toastify or create your own toast
-        alert(message);
+    // Crear el contenedor de toasts si no existe
+    let toastContainer = document.getElementById('toast-container');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.id = 'toast-container';
+        document.body.appendChild(toastContainer);
     }
+
+    // Modern notification function with glass effect
+    function showNotification(message, type = 'info') {
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+
+        const icon = getToastIcon(type);
+
+        toast.innerHTML = `
+            <div class="toast-content">
+                <i class="${icon}"></i>
+                <span class="toast-message">${message}</span>
+            </div>
+        `;
+
+        toastContainer.appendChild(toast);
+
+        // Trigger animation
+        setTimeout(() => toast.classList.add('show'), 10);
+
+        // Remove toast after 3 seconds
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    }
+
+    function getToastIcon(type) {
+        switch (type) {
+            case 'success':
+                return 'fas fa-check-circle';
+            case 'error':
+                return 'fas fa-exclamation-circle';
+            case 'warning':
+                return 'fas fa-exclamation-triangle';
+            default:
+                return 'fas fa-info-circle';
+        }
+    }
+
+    // Add CSS for toast notifications
+    const toastStyles = document.createElement('style');
+    toastStyles.innerHTML = `
+        #toast-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 9999;
+        }
+
+        .toast {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            padding: 12px 20px;
+            margin-top: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transform: translateX(120%);
+            transition: transform 0.3s ease;
+            min-width: 200px;
+            max-width: 350px;
+        }
+
+        .toast.show {
+            transform: translateX(0);
+        }
+
+        .toast-content {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .toast-message {
+            color: #333;
+            font-size: 0.9rem;
+        }
+
+        .toast i {
+            font-size: 1.2rem;
+        }
+
+        .toast-success i { color: #28a745; }
+        .toast-error i { color: #dc3545; }
+        .toast-warning i { color: #ffc107; }
+        .toast-info i { color: #17a2b8; }
+
+        @media (max-width: 480px) {
+            #toast-container {
+                bottom: 10px;
+                right: 10px;
+                left: 10px;
+            }
+            
+            .toast {
+                width: 100%;
+            }
+        }
+    `;
+    document.head.appendChild(toastStyles);
 
     // Function to update document list
     function updateDocumentList() {
