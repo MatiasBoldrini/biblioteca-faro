@@ -8,7 +8,6 @@ document.addEventListener('DOMContentLoaded', function () {
     const progressBar = uploadProgress.querySelector('.progress-bar');
     const uploadStatus = document.getElementById('uploadStatus');
     const reindexButton = document.getElementById('reindexButton');
-    const querySpinner = document.getElementById('querySpinner');
 
     // Handle file upload by clicking
     uploadArea.addEventListener('click', function () {
@@ -136,7 +135,6 @@ document.addEventListener('DOMContentLoaded', function () {
         queryInput.value = '';
 
         // Show loading indicator
-        querySpinner.classList.remove('d-none');
         sendButton.disabled = true;
 
         // Add typing indicator
@@ -232,7 +230,6 @@ document.addEventListener('DOMContentLoaded', function () {
             })
             .finally(() => {
                 // Hide loading indicator
-                querySpinner.classList.add('d-none');
                 sendButton.disabled = false;
             });
     }

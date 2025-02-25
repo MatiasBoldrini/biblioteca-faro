@@ -21,13 +21,13 @@ class GeminiService:
         try:
             self.model = genai.GenerativeModel(
                 'models/gemini-2.0-flash-lite',
-                generation_config={'temperature': 0.3}  # Default temperature
+                generation_config={'temperature': 0.2, 'top_p': 0.9 }
             )
             print("Successfully connected to Gemini API")
         except Exception as e:
             print(f"Error connecting to Gemini API: {e}")
             raise
-        
+        self.relevance_wall = 0.4
         self.vector_store = VectorStoreService()
         
     def generate_response(self, query: str, context: str, sources: List[Dict]) -> str:
@@ -43,47 +43,68 @@ class GeminiService:
             Generated response with citations
         """
         try:
-            # Verificar si hay resultados relevantes
-            if not sources or not any(source['score'] > 0.2 for source in sources):
+            if not sources or not any(source['score'] > self.relevance_wall for source in sources):
                 return "No encontré información suficientemente relevante para responder a tu pregunta específica. ¿Podrías reformularla o ser más específico?"
 
-            # Reformatear el contexto para resaltar mejor las fuentes y páginas
-            formatted_sources = []
+            # Crear un diccionario para agrupar fuentes por libro y página
+            grouped_sources = {}
             for i, source in enumerate(sources):
-                if source['score'] > 0.2:  # Solo incluir fuentes relevantes
+                if source['score'] > self.relevance_wall:
                     book_name = source["book"].split("_")[0]
                     page_num = source["page"]
-                    text = source["text"].strip()
-                    formatted_sources.append(f"[FUENTE {i+1}] De '{book_name}', página {page_num}:\n{text}")
+                    key = f"{book_name}_{page_num}"
+                    print(f"\n {'-'*30}\n Source {i}: {source['score']}\n {'-'*30} \n - {source['text']}")
+                    if key not in grouped_sources:
+                        grouped_sources[key] = {
+                            'index': len(grouped_sources) + 1,
+                            'book': book_name,
+                            'page': page_num,
+                            'text': source['text'].strip()
+                        }
+
+            # Formatear el contexto usando las fuentes agrupadas
+            formatted_sources = []
+            for source_info in grouped_sources.values():
+                formatted_sources.append(
+                    f"[Source {source_info['index']}] From '{source_info['book']}', "
+                    f"page {int(source_info['page']) + 1}:\n{source_info['text']}"
+                )
             
             formatted_context = "\n\n".join(formatted_sources)
-            
+            print(f"Formatted context:\n{formatted_context}")
             prompt = f"""
-            Eres un asistente especializado en responder preguntas basándote en la documentación proporcionada.
-            
-            CONTEXTO RELEVANTE:
+            You are a specialized assistant trained to answer questions based on the provided documentation.
+            DOCUMENTATION CONTEXT:
             {formatted_context}
             
-            PREGUNTA DEL USUARIO:
+            USER QUESTION:
             {query}
             
-            INSTRUCCIONES IMPORTANTES:
-            1. SOLO uses la información proporcionada en el CONTEXTO RELEVANTE.
-            2. Si el contexto no contiene información suficiente para responder la pregunta específica, indica claramente qué parte de la pregunta no puedes responder.
-            3. Cita SIEMPRE tus fuentes usando el formato [FUENTE X].
-            4. Incluye los números de página en las citas.
-            5. Al final, lista las fuentes utilizadas.
+            IMPORTANT INSTRUCTIONS:
+            1. ONLY use the information provided in the DOCUMENTATION CONTEXT.
+            2. If the context does not contain enough information to answer the specific question, clearly indicate which part of the question you cannot answer.
+            3. When citing a source, use ONLY the format [SOURCE X] where X is the source number.
+            4. DO NOT combine multiple sources into a single citation like [SOURCE 1, 2].
+            5. If the information comes from multiple sources, cite them separately.
+            6. At the end of your response, list the sources used with their book name and page numbers.
+            7. If the documentation context has different meanings for some areas, clearly differentiate each one, saying words like "In [X] book information is.. " or "But in [Y] book it is.."
             
-            Responde de manera clara y directa, citando las fuentes específicas para cada parte de tu respuesta.
-            Si el contexto contiene información parcial, proporciona la parte que puedas responder e indica qué información falta.
+            Example of correct citation:
+            "According to [SOURCE 1] the process begins like this... but according to [SOURCE 2] indicates that it continues..."
             """
             
             # Generate response
             response = self.model.generate_content(prompt)
             answer = response.text
             
+            # Add source list at the end if not present
+            if "Sources used:" not in answer:
+                answer += "\n\nSources used:\n"
+                for source_info in grouped_sources.values():
+                    answer += f"* [Source {source_info['index']}] from '{source_info['book']}', page {int(source_info['page']) + 1}\n"
+            
             # Process the answer to add proper citation links
-            answer = self._format_citations(answer, sources)
+            answer = self._format_citations(answer, list(grouped_sources.values()))
             
             return answer
             
@@ -93,33 +114,26 @@ class GeminiService:
     
     def _format_citations(self, text: str, sources: List[Dict]) -> str:
         """Format the citations in the text with proper links to sources"""
-        # Replace citation markers with clickable spans
-        citation_pattern = r'\[(\d+)\]'
+        citation_pattern = r'\[Source (\d+)\]'
         
         processed_text = text
         
-        # Find all citations
-        citations = re.findall(citation_pattern, text)
-        
         # Create source mapping
-        source_map = {}
-        for idx, citation_num in enumerate(set(citations)):
-            if idx < len(sources):
-                source = sources[idx]
-                book_name = source["book"].split("_")[0]  # Remove UUID part
-                page = source["page"]
-                source_map[citation_num] = {
-                    "book": book_name,
-                    "page": page,
-                    "idx": idx
-                }
+        source_map = {
+            str(source['index']): {
+                "book": source["book"],
+                "page": source["page"],
+                "idx": idx
+            } for idx, source in enumerate(sources)
+        }
         
         # Replace citations with clickable spans
-        for citation_num in set(citations):
+        for match in re.finditer(citation_pattern, text):
+            citation_num = match.group(1)
             if citation_num in source_map:
                 source = source_map[citation_num]
-                replacement = f'<span class="citation" data-source-idx="{source["idx"]}">[{citation_num}]</span>'
-                processed_text = re.sub(r'\[' + citation_num + r'\]', replacement, processed_text)
+                replacement = f'<span class="citation" data-source-idx="{source["idx"]}">[Source {citation_num}]</span>'
+                processed_text = processed_text.replace(match.group(0), replacement)
         
         return processed_text
     

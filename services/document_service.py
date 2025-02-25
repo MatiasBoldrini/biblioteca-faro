@@ -130,10 +130,10 @@ class DocumentService:
         page_pattern = (
             r"(?:\[PAGE (\d+)\])|"            # [PAGE número]
             r"(?:p[aá]gina\s+(\d+))|"         # página número
-            # r"(?:\n\s*(\d+)\s*\n)|"           # \n número \n
-            # r"(?:\n\s*(\d+)-\d+\s*\n)|"       # \n número-numero \n
+            r"(?:\n\s*(\d+)\s*\n)|"           # \n número \n
+            r"(?:\n\s*(\d+)-\d+\s*\n)|"       # \n número-numero \n
             r"(?:^(\d+)-\d+\n)|"              # número-numero\n (sin espacio a la izquierda)
-            # r"(?:^(\d+)-\d+\s*\n)"            # número-numero\n (con o sin espacio a la izquierda)
+            r"(?:^(\d+)-\d+\s*\n)"            # número-numero\n (con o sin espacio a la izquierda)
         )
         
         # Potenciales marcadores de sección (encabezados)
