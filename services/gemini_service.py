@@ -20,8 +20,8 @@ class GeminiService:
         # Get available models
         try:
             self.model = genai.GenerativeModel(
-                'models/gemini-2.0-flash-lite',
-                generation_config={'temperature': 0.5, 'top_p': 0.9 }
+                'models/gemini-1.5-pro',
+                generation_config={'temperature': 0.3, 'top_p': 0.7 }
             )
             print("Successfully connected to Gemini API")
         except Exception as e:
@@ -73,7 +73,7 @@ class GeminiService:
             formatted_context = "\n\n".join(formatted_sources)
             print(f"Formatted context:\n{formatted_context}")
             prompt = f"""
-            You are a specialized assistant trained to provide DETAILED and PRECISE answers based solely on the provided documentation.
+            You are a technical assistant. Use ONLY the provided sources to answer the question.
             
             DOCUMENTATION CONTEXT:
             {formatted_context}
@@ -82,17 +82,12 @@ class GeminiService:
             {query}
             
             INSTRUCTIONS:
-            1. Use ONLY the information available in the DOCUMENTATION CONTEXT.
-            2. If the context lacks enough information to fully answer the question, explicitly state what is missing.
-            3. Cite sources using the format [SOURCE X], where X is the source number.
-            4. Do NOT combine multiple sources into a single citation (e.g., [SOURCE 1, 2] is NOT allowed).
-            5. If information comes from multiple sources, cite each separately and clarify any differences.
-            6. At the end of the response, list the sources used along with their book name and page numbers, ONLY if the context provides enough information.
-            7. If different sources provide different perspectives, explicitly state this using phrases like:
-               - "In [SOURCE X], it is stated that... However, in [SOURCE Y], it is mentioned that..."
-            
-            Example of correct citation:
-            "According to [SOURCE 1], the process begins like this... However, [SOURCE 2] states that it continues differently..."
+            1. Answer in detail using ALL RELEVANT SOURCES.
+            2. For every claim, cite the source like [Source Number].
+            3. If sources conflict, explain differences clearly.
+            4. List all used sources with sources numbers, book name and page numbers at the end.
+            5. If there are differences between sources, explain them. in a special section.
+
             """
             
             # Generate response

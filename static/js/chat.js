@@ -278,7 +278,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // Show source information in a nicer way
     function showSourcePopup(source) {
         // Create a more elegant popup/toast (you can improve this)
-        const sourceInfo = `Fuente: ${source.book}${source.page !== 'N/A' ? ', página ' + source.page : ''}`;
+        const sourceInfo = `Fuente: ${source.book}${source.page !== '-1' ? ', página ' + source.page : '0'}`;
         showNotification(sourceInfo, 'info');
     }
 

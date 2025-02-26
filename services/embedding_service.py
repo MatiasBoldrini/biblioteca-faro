@@ -5,7 +5,7 @@ from sentence_transformers import SentenceTransformer
 
 
 class EmbeddingService:
-    def __init__(self, model_name='paraphrase-multilingual-mpnet-base-v2'):
+    def __init__(self, model_name='multi-qa-mpnet-base-dot-v1'):
         """Initialize the embedding service with the specified model"""
         try:
             self.model = SentenceTransformer(model_name)

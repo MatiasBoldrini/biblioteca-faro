@@ -16,9 +16,9 @@ class DocumentService:
     def __init__(self):
         self.base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         self.books_dir = os.path.join(self.base_dir, 'books')
-        self.chunk_size = 500  # characters per chunk
-        self.chunk_overlap = 150  # overlap between chunks
-        self.max_chunk_size = 900  # absolute maximum size for any chunk
+        self.chunk_size = 800  # characters per chunk
+        self.chunk_overlap = 250  # overlap between chunks
+        self.max_chunk_size = 1500  # absolute maximum size for any chunk
         
         # Create books directory if it doesn't exist
         os.makedirs(self.books_dir, exist_ok=True)
@@ -123,18 +123,19 @@ class DocumentService:
             return []
     
     def _create_chunks_with_metadata(self, text, book_name):
+        print(f"Creating chunks for {book_name}")
         """Split text into chunks respecting paragraph boundaries when possible"""
         chunks = []
         
         # Patrón para detectar marcadores de página
         page_pattern = (
-            # r"(?:\[PAGE (\d+)\])|"            # [PAGE número]
+            r"(?:\[PAGE (\d+)\])|"            # [PAGE número]
             # r"(?:p[aá]gina\s+(\d+))|"         # página número
-            r"(?:\n\s*(\d+)\s*\n)|"           # \n número \n
-            r"(?:\s*(\d+)\s*\n)|"           #  número \n
+            # r"(?:\n\s*(\d+)\s*\n)|"           # \n número \n
+            # r"(?:\s*(\d+)\s*\n)|"           #  número \n
 
             # r"(?:\n\s*(\d+)-\d+\s*\n)|"       # \n número-numero \n
-            r"(?:^(\d+)-\d+\n)|"              # número-numero\n (sin espacio a la izquierda)
+            # r"(?:^(\d+)-\d+\n)|"              # número-numero\n (sin espacio a la izquierda)
             # r"(?:^(\d+)-\d+\s*\n)"            # número-numero\n (con o sin espacio a la izquierda)
         )
         
@@ -263,7 +264,7 @@ class DocumentService:
     
     def _get_page_for_position(self, position, page_positions):
         """Determine the page number for a given position in the text"""
-        current_page = "N/A"
+        current_page = "0"
         for pos, page in sorted(page_positions.items()):
             if pos <= position:
                 current_page = page
