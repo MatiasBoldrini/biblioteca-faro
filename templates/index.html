@@ -11,15 +11,10 @@
 </head>
 
 <body>
-    <header class="header">
-        <div class="container">
-            <h1><i class="fas fa-book-reader me-2"></i>Biblioteca Faro</h1>
-        </div>
-    </header>
-
     <main class="container">
         <div class="col-lg-4 order-1 order-lg-2">
             <div class="sidebar-container">
+                <!-- Panel de carga de documentos -->
                 <div class="card mb-3">
                     <div class="card-header">
                         <i class="fas fa-cloud-upload-alt me-2"></i>Carga de Documentos
@@ -40,6 +35,8 @@
                         </button>
                     </div>
                 </div>
+
+                <!-- Panel de documentos cargados -->
                 <div class="card">
                     <div class="card-header">
                         <i class="fas fa-folder-open me-2"></i>Documentos Cargados
@@ -53,30 +50,51 @@
                         </div>
                     </div>
                 </div>
+                
+                <!-- Card con funcionalidades disponibles -->
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <i class="fas fa-info-circle me-2"></i>Funcionalidades
+                    </div>
+                    <div class="card-body">
+                        <p class="mb-2">Puedes usar frases como estas en el chat:</p>
+                        <ul class="feature-list">
+                            <li><i class="fas fa-file-alt me-2"></i>"Resumen del capítulo 2 del libro Tesla"</li>
+                            <li><i class="fas fa-exchange-alt me-2"></i>"Compara los capítulos 1 y 3 de Ronaldo"</li>
+                            <li><i class="fas fa-search me-2"></i>"¿Qué dice el libro sobre electricidad?"</li>
+                        </ul>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <!-- Panel principal de chat -->
+        <!-- Panel principal de chat con header integrado -->
         <div class="col-lg-8 order-2 order-lg-1">
             <div class="chat-container">
+                <div class="chat-header">
+                    <h1><i class="fas fa-book-reader me-2"></i>Biblioteca Faro</h1>
+                </div>
                 <div class="chat-messages" id="chatContainer">
                     <div class="assistant-message">
                         <p>👋 ¡Bienvenido a Biblioteca Faro!</p>
-                        <p>Carga tus documentos y pregúntame sobre su contenido. Estoy aquí para ayudarte a
-                            encontrar la
-                            información que necesitas.</p>
+                        <p>Carga tus documentos y pregúntame sobre su contenido. Puedes hacer preguntas generales, 
+                           solicitar resúmenes de capítulos específicos, o pedir comparaciones entre diferentes capítulos.</p>
+                        <p><strong>Ejemplos:</strong></p>
+                        <ul>
+                            <li>"¿Qué dice el documento sobre la teoría de Tesla?"</li>
+                            <li>"Resumen del capítulo 3 del libro Cristiano Ronaldo"</li>
+                            <li>"Compara los capítulos 1 y 2 del documento Tesla"</li>
+                        </ul>
                     </div>
                 </div>
                 <div class="input-group mb-3">
-                    <input type="text" id="queryInput" class="form-control"
-                        placeholder="Escribe tu pregunta aquí...">
+                    <input type="text" id="queryInput" class="form-control" placeholder="Escribe tu pregunta aquí...">
                     <button id="sendButton" class="btn btn-primary">
-                        <i class="fas fa-paper-plane" ></i>
+                        <i class="fas fa-paper-plane"></i>
                     </button>
                 </div>
             </div>
         </div>
-
     </main>
 
     <script src="{{ url_for('static', filename='js/chat.js') }}"></script>

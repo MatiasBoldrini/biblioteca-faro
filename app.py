@@ -11,6 +11,7 @@ from config.init_config import init_environment
 from services.document_service import DocumentService
 from services.gemini_service import GeminiService
 from services.vector_store_service import VectorStoreService
+from services.chapter_service import ChapterService
 
 # Initialize environment before anything else
 init_environment()
@@ -24,10 +25,20 @@ ALLOWED_EXTENSIONS = {'pdf', 'txt', 'doc', 'docx'}
 UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Initialize services
-document_service = DocumentService()
+# Inicialización única de servicios
+print("Initializing services...")
+# Inicializamos primero los servicios base
 vector_store = VectorStoreService()
-gemini_service = GeminiService()
+document_service = DocumentService()
+
+# Inicializamos servicios que dependen de los anteriores
+chapter_service = ChapterService(vector_store=vector_store)
+gemini_service = GeminiService(vector_store=vector_store, document_service=document_service)
+
+# Establecemos la referencia cruzada después de la creación
+gemini_service.set_chapter_service(chapter_service)
+
+print("Services initialized successfully")
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -93,7 +104,27 @@ def query():
         }), 400
     
     try:
-        # Search for relevant chunks
+        # Ahora usamos directamente Gemini para detectar la intención
+        intent_detection = gemini_service._detect_intent_with_gemini(user_query)
+        
+        if intent_detection.get('is_special_request'):
+            # Si es una solicitud de resumen o comparación, manejarlo directamente
+            if intent_detection['intent'] == 'summarize_chapter':
+                answer = gemini_service._handle_chapter_summary_request(user_query, intent_detection)
+                return jsonify({
+                    'success': True,
+                    'answer': answer,
+                    'chunks': []
+                })
+            elif intent_detection['intent'] == 'compare_chapters':
+                answer = gemini_service._handle_chapter_comparison_request(user_query, intent_detection)
+                return jsonify({
+                    'success': True,
+                    'answer': answer,
+                    'chunks': []
+                })
+        
+        # Si no es una solicitud especial, continuar con el flujo normal
         results = vector_store.search(user_query, top_k=5)
         
         if not results:
@@ -117,6 +148,7 @@ def query():
         })
     
     except Exception as e:
+        print(f"Error processing query: {str(e)}")
         return jsonify({
             'success': False,
             'message': f'Error processing query: {str(e)}'
@@ -181,4 +213,4 @@ def delete_document(filename):
         }), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 8500)))

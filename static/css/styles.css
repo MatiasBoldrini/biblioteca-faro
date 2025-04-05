@@ -72,17 +72,20 @@ body {
 }
 
 .chat-container {
+    position: relative;
+    background: white;
+    border-radius: 15px;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    height: calc(100vh - 40px);
+    margin: 20px 0;
     background: var(--bg-white-darker);
     border-radius: var(--border-radius);
     box-shadow: var(--shadow-md);
-    height: calc(100vh - 160px);
     min-height: 500px;
     display: flex;
     flex-direction: column;
     border: 1px solid rgba(0, 0, 0, 0.05);
-    overflow: hidden;
-    padding: 20px;
-    margin-bottom: 20px;
     overflow-y: auto;
     scrollbar-width: thin;
     scrollbar-color: var(--primary-light) transparent;
@@ -103,11 +106,17 @@ body {
 }
 
 .chat-header {
+    position: sticky;
+    top: 0;
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    padding: 1rem;
+    z-index: 1000;
     padding: 20px;
-    background-color: var(--bg-white);
     color: var(--text-dark);
     text-align: center;
-    border-bottom: 1px solid #f0f0f0;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -120,9 +129,12 @@ body {
 }
 
 .chat-messages {
+    padding: 20px;
+    overflow-y: auto;
+    height: calc(100% - 130px);
+    scroll-behavior: smooth;
     flex: 1;
     padding: 1.5rem;
-    overflow-y: auto;
     display: flex;
     flex-direction: column;
     gap: 1rem;
@@ -180,6 +192,11 @@ body {
 }
 
 .input-group {
+    position: sticky;
+    bottom: 0;
+    background: white;
+    padding: 15px;
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
     max-height: 80px;
     display: flex;
     flex: 1;
@@ -188,6 +205,17 @@ body {
     padding: 1rem;
     background: var(--bg-white-darker);
     border-top: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.input-group .form-control {
+    border-radius: 20px 0 0 20px;
+    border: 1px solid #e0e0e0;
+    padding: 10px 20px;
+}
+
+.input-group .btn {
+    border-radius: 0 20px 20px 0;
+    padding: 10px 20px;
 }
 
 #user-input {
@@ -282,6 +310,7 @@ body {
     /* box-shadow: var(--shadow-sm); */
     border: 1px solid rgba(0, 0, 0, 0.05);
     height: fit-content;
+    margin-bottom: 1rem;
 }
 
 .card-header {
@@ -290,11 +319,13 @@ body {
     font-weight: 600;
     color: var(--text-dark);
 }
-.card-header:first-child{
-    border-radius:  var(--border-radius);
+
+.card-header:first-child {
+    border-radius: var(--border-radius);
     border-bottom-right-radius: 0px;
     border-bottom-left-radius: 0px;
 }
+
 .upload-area {
     border: 2px dashed var(--primary-light);
     border-radius: var(--border-radius);
@@ -400,7 +431,8 @@ body {
     }
 
     .chat-container {
-        height: calc(100vh - 140px);
+        height: calc(100vh - 20px);
+        margin: 10px 0;
     }
 
     .message {
@@ -449,4 +481,291 @@ body {
     top: 5rem;
     max-height: calc(100vh - 6rem);
     overflow-y: auto;
+}
+
+/* Estilos para la nueva funcionalidad de capítulos */
+.chapter-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.chapter-item {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.chapter-item:hover {
+    background-color: var(--primary-light);
+}
+
+.chapter-item:last-child {
+    border-bottom: none;
+}
+
+.chapter-title {
+    font-weight: 500;
+    font-size: 0.95rem;
+    color: var(--text-dark);
+}
+
+.chapter-page {
+    font-size: 0.8rem;
+    color: var(--text-light);
+}
+
+.chapter-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.book-select {
+    margin-bottom: 1rem;
+    width: 100%;
+    padding: 0.75rem;
+    border-radius: var(--border-radius);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    background-color: var(--bg-white);
+    font-size: 0.95rem;
+    color: var(--text-dark);
+    cursor: pointer;
+}
+
+.summary-length {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.summary-option {
+    flex: 1;
+    text-align: center;
+    padding: 0.5rem;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: var(--transition);
+}
+
+.summary-option.active {
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.chapter-summary {
+    background-color: var(--bg-white);
+    border-radius: var(--border-radius);
+    padding: 1.5rem;
+    margin: 1rem 0;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.summary-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.summary-title {
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: var(--text-dark);
+}
+
+.summary-content {
+    font-size: 0.95rem;
+    line-height: 1.7;
+    color: var(--text-dark);
+}
+
+.comparison-container {
+    background-color: var(--bg-white);
+    border-radius: var(--border-radius);
+    padding: 1.5rem;
+    margin: 1rem 0;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.comparison-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.comparison-title {
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: var(--text-dark);
+}
+
+.comparison-content {
+    font-size: 0.95rem;
+    line-height: 1.7;
+    color: var(--text-dark);
+}
+
+.selected-chapters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 1rem 0;
+}
+
+.selected-chapter {
+    background-color: var(--primary-light);
+    border-radius: 20px;
+    padding: 0.3rem 0.8rem;
+    font-size: 0.85rem;
+    color: var(--primary-dark);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.selected-chapter i {
+    cursor: pointer;
+    font-size: 0.8rem;
+}
+
+.tab-buttons {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    padding-bottom: 0.5rem;
+}
+
+.tab-button {
+    padding: 0.7rem 1rem;
+    border: none;
+    background: none;
+    font-weight: 500;
+    cursor: pointer;
+    color: var(--text-light);
+    transition: var(--transition);
+    border-bottom: 2px solid transparent;
+}
+
+.tab-button.active {
+    color: var(--primary-color);
+    border-bottom: 2px solid var(--primary-color);
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+    animation: fadeIn 0.3s ease;
+}
+
+.loading-spinner {
+    display: inline-block;
+    width: 1.5rem;
+    height: 1.5rem;
+    border: 3px solid rgba(0, 0, 0, 0.1);
+    border-radius: 50%;
+    border-top-color: var(--primary-color);
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Tooltips */
+.tooltip {
+    position: relative;
+    display: inline-block;
+    cursor: help;
+}
+
+.tooltip .tooltiptext {
+    visibility: hidden;
+    width: 200px;
+    background-color: #555;
+    color: #fff;
+    text-align: center;
+    border-radius: 6px;
+    padding: 0.5rem;
+    position: absolute;
+    z-index: 1;
+    bottom: 125%;
+    left: 50%;
+    transform: translateX(-50%);
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.tooltip:hover .tooltiptext {
+    visibility: visible;
+    opacity: 1;
+}
+
+.btn-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+    border-radius: 0.25rem;
+}
+
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.5);
+    animation: fadeIn 0.3s;
+}
+
+.modal-content {
+    position: relative;
+    background-color: var(--bg-white);
+    margin: 10% auto;
+    padding: 1.5rem;
+    border-radius: var(--border-radius);
+    width: 80%;
+    max-width: 700px;
+    box-shadow: var(--shadow-md);
+    animation: fadeIn 0.3s, slideInFromTop 0.3s;
+}
+
+.close {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    color: var(--text-light);
+    font-size: 1.5rem;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+@keyframes slideInFromTop {
+    from {
+        transform: translateY(-50px);
+    }
+    to {
+        transform: translateY(0);
+    }
 }
